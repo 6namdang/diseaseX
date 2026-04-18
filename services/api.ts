@@ -1,41 +1,48 @@
 const API_BASE = 'http://localhost:8000';
 
 export interface TriagePayload {
-  age: number;
-  weight_kg: number;
-  location: string;
-  symptoms: Record<string, boolean>;
+  patient: {
+    age: number;
+    weight_kg: number;
+    location: string;
+    high_prevalence_zone: boolean;
+  };
+  severe_flags: Record<string, boolean>;
+  cycles: {
+    timestamp: string;
+    cold_stage: boolean;
+    hot_stage: boolean;
+    sweating_stage: boolean;
+    temperature?: number;
+  }[];
 }
 
 export interface TriageResponse {
-  severity: 'RED' | 'YELLOW' | 'GREEN';
-  action: string;
-  matched_protocol: string;
-  clinical_steps: string;
-  dosing: string;
-  case_id: string;
+  severity:           'RED' | 'YELLOW' | 'GREEN';
+  action:             string;
+  probable_malaria:   boolean;
+  reasoning:          string;
+  who_guidance:       string;
+  next_check_hours:   number;
+  case_id:            string;
+  referral_required:  boolean;
 }
 
-// Offline fallback — runs when no internet
 function offlineFallback(payload: TriagePayload): TriageResponse {
-  const danger = ['convulsions', 'unconscious', 'unable_to_drink'];
-  const dangerCount = danger.filter(s => payload.symptoms[s]).length;
-
-  let severity: 'RED' | 'YELLOW' | 'GREEN' = 'GREEN';
-  if (dangerCount >= 2) severity = 'RED';
-  else if (dangerCount === 1) severity = 'YELLOW';
+  const f = payload.severe_flags;
+  const isRed = f.jaundice || f.mental_confusion || f.convulsions || f.unconscious;
+  const isYellow = f.unable_to_drink || f.dark_urine;
+  const hasCycles = payload.cycles.length >= 2;
 
   return {
-    severity,
-    action: severity === 'RED'
-      ? 'EVACUATE IMMEDIATELY'
-      : severity === 'YELLOW'
-      ? 'CALL SUPERVISOR NOW'
-      : 'TREAT AND MONITOR',
-    matched_protocol: 'Severe Malaria (offline mode)',
-    clinical_steps:   '⚠️ OFFLINE — Connect to internet for full WHO protocol guidance.',
-    dosing:           '⚠️ OFFLINE — Dosing unavailable. Call supervisor.',
-    case_id:          `OFFLINE-${Date.now()}`,
+    severity:          isRed ? 'RED' : isYellow ? 'YELLOW' : 'GREEN',
+    action:            isRed ? 'REFER TO HOSPITAL IMMEDIATELY' : isYellow ? 'CALL SUPERVISOR' : 'CONTINUE MONITORING',
+    probable_malaria:  hasCycles || isRed,
+    reasoning:         '⚠️ Offline mode — based on local logic only.',
+    who_guidance:      '⚠️ Connect to internet for full WHO CDS guidance.',
+    next_check_hours:  isRed ? 0 : 12,
+    case_id:           `OFFLINE-${Date.now()}`,
+    referral_required: isRed,
   };
 }
 

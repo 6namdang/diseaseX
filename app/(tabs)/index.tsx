@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  TextInput, StyleSheet, ActivityIndicator, Alert,
+  TextInput, StyleSheet, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,58 +10,41 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { COLORS } from '../../constants/theme';
 import { useAppState } from '../../store/AppContext';
-import { submitTriage } from '../../services/api';
 
-const SYMPTOMS = [
-  { key: 'fever_high',           label: 'High Fever',           desc: '≥ 38.5°C',                   danger: false },
-  { key: 'anemia',               label: 'Anemia Signs',         desc: 'Pale palms or eyes',          danger: false },
-  { key: 'respiratory_distress', label: 'Breathing Difficulty', desc: 'Fast or labored breathing',   danger: false },
-  { key: 'vomiting',             label: 'Vomiting',             desc: 'Repeated vomiting',           danger: false },
-  { key: 'diarrhea',             label: 'Diarrhea',             desc: 'Watery stools',               danger: false },
-  { key: 'unable_to_drink',      label: 'Cannot Drink',         desc: 'Refuses or cannot swallow',   danger: true  },
-  { key: 'convulsions',          label: 'Convulsions',          desc: 'Seizure activity',            danger: true  },
-  { key: 'unconscious',          label: 'Unconscious',          desc: 'Unresponsive or limp',        danger: true  },
+const PROVINCES = [
+  { name: 'Kwango',    high_risk: true  },
+  { name: 'Kinshasa',  high_risk: false },
+  { name: 'Kasai',     high_risk: true  },
+  { name: 'Kivu',      high_risk: true  },
+  { name: 'Katanga',   high_risk: false },
+  { name: 'Equateur',  high_risk: true  },
 ];
 
-const LOCATIONS = ['Kwango', 'Kinshasa', 'Kasai', 'Kivu', 'Katanga', 'Equateur'];
-
-export default function TriageScreen() {
+export default function IntakeScreen() {
   const router = useRouter();
-  const { setPatient, setResult } = useAppState();
+  const { setPatient, reset } = useAppState();
 
-  const [age, setAge]       = useState('');
-  const [weight, setWeight] = useState('');
-  const [location, setLocation] = useState('Kwango');
-  const [symptoms, setSymptoms] = useState<Record<string, boolean>>({});
-  const [loading, setLoading]   = useState(false);
+  const [age,      setAge]      = useState('');
+  const [weight,   setWeight]   = useState('');
+  const [village,  setVillage]  = useState('');
+  const [province, setProvince] = useState<typeof PROVINCES[0] | null>(null);
 
-  const toggle = (key: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSymptoms(prev => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const activeCount = Object.values(symptoms).filter(Boolean).length;
-
-  const handleSubmit = async () => {
-    if (!age || !weight) {
-      Alert.alert('Missing Info', 'Please enter age and weight.');
+  const handleNext = () => {
+    if (!age || !weight || !province) {
+      Alert.alert('Missing Info', 'Please enter age, weight, and select a province.');
       return;
     }
-    setLoading(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-    const payload = {
-      age:      parseInt(age),
-      weight_kg: parseFloat(weight),
-      location,
-      symptoms,
-    };
-
-    setPatient(payload);
-    const result = await submitTriage(payload);
-    setResult(result);
-    setLoading(false);
-    router.push('/result');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    reset();
+    setPatient({
+      id:                   `PT-${Date.now()}`,
+      age:                  parseInt(age),
+      weight_kg:            parseFloat(weight),
+      location:             province.name,
+      village:              village || undefined,
+      high_prevalence_zone: province.high_risk,
+    });
+    router.push('/triage');
   };
 
   return (
@@ -74,8 +57,15 @@ export default function TriageScreen() {
           <Text style={s.appName}>DISEASE X</Text>
         </View>
 
-        <Text style={s.title}>Patient Triage</Text>
-        <Text style={s.subtitle}>Enter patient info and observed symptoms</Text>
+        <Text style={s.title}>New Patient</Text>
+        <Text style={s.subtitle}>Step 1 of 3 — Intake & Location</Text>
+
+        {/* Progress bar */}
+        <View style={s.progressWrap}>
+          <View style={[s.progressStep, s.progressActive]} />
+          <View style={s.progressStep} />
+          <View style={s.progressStep} />
+        </View>
 
         {/* Patient Info */}
         <View style={s.card}>
@@ -104,77 +94,71 @@ export default function TriageScreen() {
               />
             </View>
           </View>
-
-          <Text style={s.label}>Province</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {LOCATIONS.map(loc => (
-              <TouchableOpacity
-                key={loc}
-                style={[s.chip, location === loc && s.chipActive]}
-                onPress={() => setLocation(loc)}
-              >
-                <Text style={[s.chipText, location === loc && s.chipTextActive]}>
-                  {loc}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <Text style={s.label}>Village (optional)</Text>
+          <TextInput
+            style={[s.input, { marginBottom: 0 }]}
+            value={village}
+            onChangeText={setVillage}
+            placeholder="e.g. Panzi"
+            placeholderTextColor={COLORS.textMuted}
+          />
         </View>
 
-        {/* Symptoms */}
+        {/* Province selector */}
         <View style={s.card}>
-          <View style={s.cardTitleRow}>
-            <Text style={s.cardTitle}>SYMPTOMS</Text>
-            {activeCount > 0 && (
-              <View style={s.badge}>
-                <Text style={s.badgeText}>{activeCount} selected</Text>
-              </View>
-            )}
-          </View>
-
-          {SYMPTOMS.map(sym => {
-            const active = !!symptoms[sym.key];
+          <Text style={s.cardTitle}>PROVINCE / REGION</Text>
+          {PROVINCES.map(p => {
+            const selected = province?.name === p.name;
             return (
               <TouchableOpacity
-                key={sym.key}
-                style={[
-                  s.symptomRow,
-                  active && (sym.danger ? s.symptomDanger : s.symptomActive),
-                ]}
-                onPress={() => toggle(sym.key)}
+                key={p.name}
+                style={[s.provinceRow, selected && s.provinceRowActive]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setProvince(p);
+                }}
               >
-                <View style={s.symptomInfo}>
-                  <Text style={[s.symptomLabel, active && { color: COLORS.text }]}>
-                    {sym.label}
+                <View style={s.provinceLeft}>
+                  <Ionicons
+                    name="location"
+                    size={16}
+                    color={selected ? COLORS.accent : COLORS.textMuted}
+                  />
+                  <Text style={[s.provinceName, selected && { color: COLORS.text }]}>
+                    {p.name}
                   </Text>
-                  <Text style={s.symptomDesc}>{sym.desc}</Text>
                 </View>
-                <View style={[
-                  s.checkbox,
-                  active && (sym.danger ? s.checkboxDanger : s.checkboxActive),
-                ]}>
-                  {active && <Ionicons name="checkmark" size={14} color="#fff" />}
+                <View style={[s.riskBadge, p.high_risk ? s.riskHigh : s.riskLow]}>
+                  <Text style={[s.riskText, { color: p.high_risk ? COLORS.red : COLORS.green }]}>
+                    {p.high_risk ? 'HIGH RISK' : 'LOW RISK'}
+                  </Text>
                 </View>
               </TouchableOpacity>
             );
           })}
         </View>
 
-        {/* Submit */}
-        <TouchableOpacity onPress={handleSubmit} disabled={loading}>
+        {/* High risk warning */}
+        {province?.high_risk && (
+          <View style={s.warningBox}>
+            <Ionicons name="warning" size={18} color={COLORS.yellow} />
+            <Text style={s.warningText}>
+              {province.name} is a high-prevalence malaria zone.
+              Malaria probability index is elevated for this patient.
+            </Text>
+          </View>
+        )}
+
+        {/* Next */}
+        <TouchableOpacity onPress={handleNext}>
           <LinearGradient
-            colors={loading ? [COLORS.surface, COLORS.surface] : [COLORS.red, '#C41F35']}
-            style={s.submitBtn}
+            colors={[COLORS.accent, '#0080CC']}
+            style={s.nextBtn}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
           >
-            {loading
-              ? <ActivityIndicator color="#fff" />
-              : <>
-                  <Ionicons name="pulse" size={20} color="#fff" />
-                  <Text style={s.submitText}>RUN TRIAGE</Text>
-                </>
-            }
+            <Text style={s.nextText}>NEXT — CHECK SEVERE SIGNS</Text>
+            <Ionicons name="arrow-forward" size={18} color="#fff" />
           </LinearGradient>
         </TouchableOpacity>
 
@@ -185,35 +169,32 @@ export default function TriageScreen() {
 }
 
 const s = StyleSheet.create({
-  safe:          { flex: 1, backgroundColor: COLORS.bg },
-  scroll:        { paddingHorizontal: 16 },
-  header:        { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 16, paddingBottom: 4 },
-  dot:           { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.red },
-  appName:       { color: COLORS.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 2 },
-  title:         { color: COLORS.text, fontSize: 28, fontWeight: '800', marginTop: 8 },
-  subtitle:      { color: COLORS.textSecondary, fontSize: 14, marginTop: 4, marginBottom: 20 },
-  card:          { backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: 16, marginBottom: 16 },
-  cardTitle:     { color: COLORS.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 2, marginBottom: 14 },
-  cardTitleRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  badge:         { backgroundColor: COLORS.accent + '20', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
-  badgeText:     { color: COLORS.accent, fontSize: 11, fontWeight: '700' },
-  row:           { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  inputGroup:    { flex: 1 },
-  label:         { color: COLORS.textMuted, fontSize: 11, fontWeight: '600', letterSpacing: 1, marginBottom: 6, textTransform: 'uppercase' },
-  input:         { backgroundColor: COLORS.inputBg, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 12, color: COLORS.text, fontSize: 16, fontWeight: '600' },
-  chip:          { borderWidth: 1, borderColor: COLORS.border, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, marginRight: 8, backgroundColor: COLORS.inputBg },
-  chipActive:    { backgroundColor: COLORS.accentDim, borderColor: COLORS.accent },
-  chipText:      { color: COLORS.textMuted, fontSize: 13, fontWeight: '600' },
-  chipTextActive:{ color: COLORS.accent },
-  symptomRow:    { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, marginBottom: 8, backgroundColor: COLORS.inputBg, borderWidth: 1, borderColor: COLORS.border },
-  symptomActive: { borderColor: COLORS.accent + '60', backgroundColor: COLORS.accentDim },
-  symptomDanger: { borderColor: COLORS.red + '60', backgroundColor: COLORS.redDim },
-  symptomInfo:   { flex: 1 },
-  symptomLabel:  { color: COLORS.textSecondary, fontSize: 14, fontWeight: '600' },
-  symptomDesc:   { color: COLORS.textMuted, fontSize: 11, marginTop: 2 },
-  checkbox:      { width: 24, height: 24, borderRadius: 6, borderWidth: 1.5, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
-  checkboxActive:{ backgroundColor: COLORS.accent, borderColor: COLORS.accent },
-  checkboxDanger:{ backgroundColor: COLORS.red, borderColor: COLORS.red },
-  submitBtn:     { borderRadius: 14, padding: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  submitText:    { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 2 },
+  safe:              { flex: 1, backgroundColor: COLORS.bg },
+  scroll:            { paddingHorizontal: 16 },
+  header:            { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 16, paddingBottom: 4 },
+  dot:               { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.red },
+  appName:           { color: COLORS.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 2 },
+  title:             { color: COLORS.text, fontSize: 28, fontWeight: '800', marginTop: 8 },
+  subtitle:          { color: COLORS.textSecondary, fontSize: 14, marginTop: 4, marginBottom: 16 },
+  progressWrap:      { flexDirection: 'row', gap: 6, marginBottom: 20 },
+  progressStep:      { flex: 1, height: 4, borderRadius: 2, backgroundColor: COLORS.border },
+  progressActive:    { backgroundColor: COLORS.accent },
+  card:              { backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: 16, marginBottom: 16 },
+  cardTitle:         { color: COLORS.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 2, marginBottom: 14 },
+  row:               { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  inputGroup:        { flex: 1 },
+  label:             { color: COLORS.textMuted, fontSize: 11, fontWeight: '600', letterSpacing: 1, marginBottom: 6, textTransform: 'uppercase' },
+  input:             { backgroundColor: COLORS.inputBg, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 12, color: COLORS.text, fontSize: 16 },
+  provinceRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderRadius: 12, marginBottom: 8, backgroundColor: COLORS.inputBg, borderWidth: 1, borderColor: COLORS.border },
+  provinceRowActive: { borderColor: COLORS.accent, backgroundColor: COLORS.accentDim },
+  provinceLeft:      { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  provinceName:      { color: COLORS.textSecondary, fontSize: 15, fontWeight: '600' },
+  riskBadge:         { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1 },
+  riskHigh:          { backgroundColor: COLORS.redDim, borderColor: COLORS.red + '40' },
+  riskLow:           { backgroundColor: COLORS.greenDim, borderColor: COLORS.green + '40' },
+  riskText:          { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  warningBox:        { flexDirection: 'row', gap: 10, backgroundColor: COLORS.yellowDim, borderWidth: 1, borderColor: COLORS.yellow + '40', borderRadius: 14, padding: 14, marginBottom: 16 },
+  warningText:       { color: COLORS.textSecondary, fontSize: 13, lineHeight: 20, flex: 1 },
+  nextBtn:           { borderRadius: 14, padding: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  nextText:          { color: '#fff', fontSize: 15, fontWeight: '800', letterSpacing: 1 },
 });

@@ -1,51 +1,82 @@
+Markdown
+# DiseaseX
+
+DiseaseX is a triage and protocol application designed to assist in medical decision-making. This document outlines the project structure, development guidelines, and team responsibilities.
+
+## 📂 Project Structure
+
+```text
 DiseaseX/
-├── app/
-│   ├── _layout.tsx          ← Root layout, wraps everything in AppProvider
-│   ├── index.tsx            ← Redirects to tabs
-│   ├── result.tsx           ← Result screen (to be built)
-│   └── (tabs)/
-│       ├── _layout.tsx      ← Tab bar config (add new tabs here)
-│       ├── index.tsx        ← Triage screen ✅ BUILT
-│       ├── protocol.tsx     ← Protocol walker (placeholder)
-│       ├── dosing.tsx       ← Dosing calculator (placeholder)
-│       └── cases.tsx        ← Case log (placeholder)
+├── app/                  # File-based routing (expo-router)
+│   ├── _layout.tsx       # Root layout, wraps everything in AppProvider
+│   ├── index.tsx         # Redirects to tabs
+│   ├── result.tsx        # Result screen
+│   └── (tabs)/           # Tab bar configuration
+│       ├── _layout.tsx   # Tab bar config
+│       ├── index.tsx     # Triage screen (✅ BUILT)
+│       ├── protocol.tsx  # Protocol walker
+│       ├── dosing.tsx    # Dosing calculator
+│       └── cases.tsx     # Case log
 ├── constants/
-│   └── theme.ts             ← All colors live here. Never hardcode colors.
+│   └── theme.ts          # Centralized style definitions
 ├── store/
-│   └── AppContext.tsx       ← Global state. Patient data + triage result.
+│   └── AppContext.tsx    # Global state (Patient data + triage result)
 └── services/
-    └── api.ts               ← All backend calls go here. Has offline fallback.
+    └── api.ts            # API calls and offline fallback logic
+🛠 Development Rules
+To ensure code consistency, every team member must adhere to the following three rules:
 
+1. Never Hardcode Colors
+All colors must be imported from constants/theme.ts. Do not use hex codes or standard color strings in components.
 
+TypeScript
+import { COLORS } from '../../constants/theme';
 
+// Correct Usage
+<View style={{ backgroundColor: COLORS.red }} />
+<Text style={{ color: COLORS.text }}>Hello World</Text>
 
-Three Rules for the Team
-1. Never hardcode colors
-Always import from constants/theme.ts:
-typescriptimport { COLORS } from '../../constants/theme';
-// use COLORS.red, COLORS.text, etc.
+2. Share Data through the Store
+Do not pass data between screens via navigation params or props. Use the global AppContext as the single source of truth.
 
-2. Share data through the store
-Never pass data between screens via props or navigation params. Use the global store:
-typescriptimport { useAppState } from '../../store/AppContext';
+TypeScript
+import { useAppState } from '../../store/AppContext';
+
+// Correct Usage
 const { patient, result, setResult } = useAppState();
-3. All API calls go through services/api.ts
-Never call fetch() directly in a screen. Add a function to api.ts and import it. This keeps the offline fallback logic in one place.
+3. All API Calls go through services/api.ts
+Do not call fetch() directly in a screen. Add a function to api.ts and import it. This ensures all API logic and offline fallback handling remains centralized.
 
-How Navigation Works
-This uses expo-router — file-based routing like Next.js.
+🧭 Navigation
+This project utilizes expo-router, which provides file-based routing similar to Next.js.
 
-Every file in app/ is a route
-app/(tabs)/index.tsx = the / tab
+Every file inside app/ is automatically a route.
+
+app/(tabs)/index.tsx corresponds to the base tab route.
+
+Common Navigation Commands:
+
 To navigate: router.push('/result')
+
 To go back: router.back()
 
+👥 Team Assignments
+Role	Responsibility	Focus
+FE-1	app/(tabs)/index.tsx	Triage screen optimization
+FE-2	app/result.tsx	Result display & WHO protocol steps
+BE-1	services/api.ts	Backend API integration & main.py
+BE-2	app/(tabs)/dosing.tsx & cases.tsx	Dosing calculator & Case logging
+🚀 Getting Started
+Clone the Repository: Ensure you pull the latest code.
 
-Team Split
-PersonFile to ownFE-1app/(tabs)/index.tsx — triage screen (done, can improve)FE-2app/result.tsx — result + WHO protocol stepsBE-1services/api.ts + backend main.pyBE-2app/(tabs)/dosing.tsx + app/(tabs)/cases.tsx
+Branching: Always create a new feature branch from main. Do not push directly to main.
 
-To Run
-bashnpm install
+Install Dependencies:
+
+Bash
+npm install
+Run the App:
+
+Bash
 npx expo start
-# Scan QR with Expo Go on phone
-Push to GitHub first, everyone branches off main.Sonnet 4.6
+Preview: Scan the QR code generated in your terminal using the Expo Go app on your physical device.
