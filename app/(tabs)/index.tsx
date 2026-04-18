@@ -1,200 +1,408 @@
-import React, { useState } from 'react';
-import {
-  View, Text, ScrollView, TouchableOpacity,
-  TextInput, StyleSheet, Alert,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Feather } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
-import { COLORS } from '../../constants/theme';
-import { useAppState } from '../../store/AppContext';
+import { router } from 'expo-router';
+import { useState } from 'react';
+import {
+  Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { GlassCard } from '../../components/ui/GlassCard';
+import { ScreenBackdrop } from '../../components/ui/ScreenBackdrop';
+import { ONBOARDING_KEY } from '../../constants/appStorage';
+import {
+  fonts,
+  glass,
+  healingTokens,
+  palette,
+  radii,
+  space,
+  type HealingStatus,
+} from '../../constants/designTokens';
+import {
+  MOCK_AI_BRIEFING,
+  MOCK_CHW,
+  MOCK_DASHBOARD_TASKS,
+  MOCK_OUTBREAK_ALERTS,
+  MOCK_RULE_OUT_CARD,
+} from '../../data/mockClinical';
+import { useContentInsets } from '../../hooks/useContentInsets';
 
-const PROVINCES = [
-  { name: 'Kwango',    high_risk: true  },
-  { name: 'Kinshasa',  high_risk: false },
-  { name: 'Kasai',     high_risk: true  },
-  { name: 'Kivu',      high_risk: true  },
-  { name: 'Katanga',   high_risk: false },
-  { name: 'Equateur',  high_risk: true  },
-];
+export default function HomeScreen() {
+  const insets = useContentInsets();
+  const [status, setStatus] = useState<HealingStatus>('monitor');
+  const [tasks, setTasks] = useState(() => MOCK_DASHBOARD_TASKS.map((t) => ({ ...t })));
 
-export default function IntakeScreen() {
-  const router = useRouter();
-  const { setPatient, reset } = useAppState();
+  const token = healingTokens[status];
+  const dateStr = new Date().toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
 
-  const [age,      setAge]      = useState('');
-  const [weight,   setWeight]   = useState('');
-  const [village,  setVillage]  = useState('');
-  const [province, setProvince] = useState<typeof PROVINCES[0] | null>(null);
-
-  const handleNext = () => {
-    if (!age || !weight || !province) {
-      Alert.alert('Missing Info', 'Please enter age, weight, and select a province.');
-      return;
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    reset();
-    setPatient({
-      id:                   `PT-${Date.now()}`,
-      age:                  parseInt(age),
-      weight_kg:            parseFloat(weight),
-      location:             province.name,
-      village:              village || undefined,
-      high_prevalence_zone: province.high_risk,
-    });
-    router.push('/triage');
+  const toggleTask = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
   };
 
+  const logout = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert('Sign out', 'Return to welcome screen?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: async () => {
+          await AsyncStorage.removeItem(ONBOARDING_KEY);
+          router.replace('/welcome');
+        },
+      },
+    ]);
+  };
+
+  const cycleStatus = () => {
+    Haptics.selectionAsync();
+    setStatus((s) => (s === 'good' ? 'monitor' : s === 'monitor' ? 'alert' : 'good'));
+  };
+
+  const statusIcon =
+    status === 'good' ? 'shield' : status === 'monitor' ? 'eye' : 'alert-triangle';
+
+  const pressOpacity = Platform.OS !== 'web';
+
   return (
-    <SafeAreaView style={s.safe}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
-
-        {/* Header */}
-        <View style={s.header}>
-          <View style={s.dot} />
-          <Text style={s.appName}>DISEASE X</Text>
-        </View>
-
-        <Text style={s.title}>New Patient</Text>
-        <Text style={s.subtitle}>Step 1 of 3 — Intake & Location</Text>
-
-        {/* Progress bar */}
-        <View style={s.progressWrap}>
-          <View style={[s.progressStep, s.progressActive]} />
-          <View style={s.progressStep} />
-          <View style={s.progressStep} />
-        </View>
-
-        {/* Patient Info */}
-        <View style={s.card}>
-          <Text style={s.cardTitle}>PATIENT INFO</Text>
-          <View style={s.row}>
-            <View style={s.inputGroup}>
-              <Text style={s.label}>Age (years)</Text>
-              <TextInput
-                style={s.input}
-                value={age}
-                onChangeText={setAge}
-                keyboardType="numeric"
-                placeholder="e.g. 4"
-                placeholderTextColor={COLORS.textMuted}
-              />
-            </View>
-            <View style={s.inputGroup}>
-              <Text style={s.label}>Weight (kg)</Text>
-              <TextInput
-                style={s.input}
-                value={weight}
-                onChangeText={setWeight}
-                keyboardType="decimal-pad"
-                placeholder="e.g. 11.5"
-                placeholderTextColor={COLORS.textMuted}
-              />
-            </View>
+    <ScreenBackdrop>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={{
+          paddingTop: insets.top + 12,
+          paddingBottom: insets.bottom + 100,
+          paddingHorizontal: space.padH,
+          gap: space.gap,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={styles.dateTiny}>{dateStr.toUpperCase()}</Text>
+            <Text style={styles.greeting}>Field desk · {MOCK_CHW.greetingName}</Text>
+            <Text style={styles.subtitle}>{MOCK_CHW.postLabel}</Text>
           </View>
-          <Text style={s.label}>Village (optional)</Text>
-          <TextInput
-            style={[s.input, { marginBottom: 0 }]}
-            value={village}
-            onChangeText={setVillage}
-            placeholder="e.g. Panzi"
-            placeholderTextColor={COLORS.textMuted}
-          />
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={cycleStatus}
+              style={({ pressed }) => [
+                styles.wkPill,
+                pressOpacity && pressed && { opacity: 0.88, transform: [{ scale: 0.97 }] },
+              ]}
+            >
+              <Text style={styles.wkPillText}>Mock band</Text>
+            </Pressable>
+            <Pressable
+              onPress={logout}
+              style={({ pressed }) => [
+                styles.logoutBtn,
+                pressOpacity && pressed && { opacity: 0.88, transform: [{ scale: 0.97 }] },
+              ]}
+              accessibilityLabel="Sign out"
+            >
+              <Feather name="log-out" size={18} color={palette.white} />
+            </Pressable>
+          </View>
         </View>
 
-        {/* Province selector */}
-        <View style={s.card}>
-          <Text style={s.cardTitle}>PROVINCE / REGION</Text>
-          {PROVINCES.map(p => {
-            const selected = province?.name === p.name;
-            return (
-              <TouchableOpacity
-                key={p.name}
-                style={[s.provinceRow, selected && s.provinceRowActive]}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setProvince(p);
-                }}
-              >
-                <View style={s.provinceLeft}>
-                  <Ionicons
-                    name="location"
-                    size={16}
-                    color={selected ? COLORS.accent : COLORS.textMuted}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Outbreak signals (mock)</Text>
+          <View style={{ gap: 10 }}>
+            {MOCK_OUTBREAK_ALERTS.map((a) => (
+              <GlassCard key={a.id} intensity={36}>
+                <View style={styles.alertRow}>
+                  <View
+                    style={[
+                      styles.alertDot,
+                      {
+                        backgroundColor:
+                          a.band === 'monitor' ? palette.statusMonitor : palette.statusGood,
+                      },
+                    ]}
                   />
-                  <Text style={[s.provinceName, selected && { color: COLORS.text }]}>
-                    {p.name}
-                  </Text>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={styles.alertTitle}>{a.title}</Text>
+                    <Text style={styles.alertDetail}>{a.detail}</Text>
+                    <Text style={styles.alertMeta}>{a.meta}</Text>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={palette.textTertiary} />
                 </View>
-                <View style={[s.riskBadge, p.high_risk ? s.riskHigh : s.riskLow]}>
-                  <Text style={[s.riskText, { color: p.high_risk ? COLORS.red : COLORS.green }]}>
-                    {p.high_risk ? 'HIGH RISK' : 'LOW RISK'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
+              </GlassCard>
+            ))}
+          </View>
         </View>
 
-        {/* High risk warning */}
-        {province?.high_risk && (
-          <View style={s.warningBox}>
-            <Ionicons name="warning" size={18} color={COLORS.yellow} />
-            <Text style={s.warningText}>
-              {province.name} is a high-prevalence malaria zone.
-              Malaria probability index is elevated for this patient.
-            </Text>
+        <Pressable
+          onPress={cycleStatus}
+          style={({ pressed }) => [
+            pressOpacity && pressed && { opacity: 0.92, transform: [{ scale: 0.99 }] },
+          ]}
+        >
+          <GlassCard intensity={32} contentStyle={{ backgroundColor: token.bg }}>
+            <View style={styles.statusInner}>
+              <Feather
+                name={statusIcon}
+                size={24}
+                color={
+                  status === 'good'
+                    ? palette.statusGood
+                    : status === 'monitor'
+                      ? palette.statusMonitor
+                      : palette.statusAlert
+                }
+              />
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={styles.statusLabel}>{token.label}</Text>
+                <Text style={styles.statusMsg}>{token.message}</Text>
+              </View>
+            </View>
+          </GlassCard>
+        </Pressable>
+
+        <GlassCard intensity={34}>
+          <Text style={styles.micro}>Probability stack (mock)</Text>
+          <View style={styles.stackRow}>
+            <View style={{ flex: 1, gap: 6 }}>
+              <Text style={styles.stackName}>{MOCK_RULE_OUT_CARD.primary.name}</Text>
+              <View style={styles.stackTrack}>
+                <View
+                  style={[
+                    styles.stackFill,
+                    { width: `${MOCK_RULE_OUT_CARD.primary.pct}%`, backgroundColor: palette.statusAlert },
+                  ]}
+                />
+              </View>
+            </View>
+            <Text style={styles.stackPct}>{MOCK_RULE_OUT_CARD.primary.pct}%</Text>
           </View>
-        )}
+          <View style={styles.stackRow}>
+            <View style={{ flex: 1, gap: 6 }}>
+              <Text style={styles.stackName}>{MOCK_RULE_OUT_CARD.secondary.name}</Text>
+              <View style={styles.stackTrack}>
+                <View
+                  style={[
+                    styles.stackFill,
+                    {
+                      width: `${MOCK_RULE_OUT_CARD.secondary.pct}%`,
+                      backgroundColor: palette.statusMonitor,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+            <Text style={styles.stackPct}>{MOCK_RULE_OUT_CARD.secondary.pct}%</Text>
+          </View>
+          <Text style={styles.reasoning}>{MOCK_RULE_OUT_CARD.reasoning}</Text>
+        </GlassCard>
 
-        {/* Next */}
-        <TouchableOpacity onPress={handleNext}>
-          <LinearGradient
-            colors={[COLORS.accent, '#0080CC']}
-            style={s.nextBtn}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-          >
-            <Text style={s.nextText}>NEXT — CHECK SEVERE SIGNS</Text>
-            <Ionicons name="arrow-forward" size={18} color="#fff" />
-          </LinearGradient>
-        </TouchableOpacity>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Shift tasks (mock)</Text>
+          <GlassCard intensity={38}>
+            {tasks.map((t) => (
+              <Pressable
+                key={t.id}
+                onPress={() => toggleTask(t.id)}
+                style={({ pressed }) => [
+                  styles.taskRow,
+                  pressOpacity && pressed && { opacity: 0.92 },
+                ]}
+              >
+                <View style={[styles.checkbox, t.done && styles.checkboxOn]}>
+                  {t.done ? <Feather name="check" size={14} color={palette.white} /> : null}
+                </View>
+                <Text style={[styles.taskLabel, t.done && styles.taskDone]}>{t.label}</Text>
+              </Pressable>
+            ))}
+          </GlassCard>
+        </View>
 
-        <View style={{ height: 40 }} />
+        <GlassCard intensity={36}>
+          <View style={styles.aiHeader}>
+            <Feather name="cpu" size={20} color={palette.primary} />
+            <Text style={styles.aiTitle}>AI triage brief (mock)</Text>
+          </View>
+          <Text style={styles.aiBody}>{MOCK_AI_BRIEFING}</Text>
+        </GlassCard>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick actions</Text>
+          <View style={{ gap: 12 }}>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(tabs)/assessments');
+              }}
+              style={({ pressed }) => [
+                styles.primaryAction,
+                pressOpacity && pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+              ]}
+            >
+              <Feather name="activity" size={20} color={palette.white} />
+              <Text style={styles.primaryActionText}>New assessment</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(tabs)/logs');
+              }}
+              style={({ pressed }) => [
+                styles.glassBtn,
+                pressOpacity && pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+              ]}
+            >
+              <Feather name="layers" size={18} color={palette.primary} />
+              <Text style={styles.glassBtnText}>Patient queue & signals</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(tabs)/chat');
+              }}
+              style={({ pressed }) => [
+                styles.glassBtn,
+                pressOpacity && pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+              ]}
+            >
+              <Feather name="message-circle" size={18} color={palette.primary} />
+              <Text style={styles.glassBtnText}>Supervisor & AI desk</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                Alert.alert('Protocols (mock)', 'Offline WHO / IMCI library — UI hook only.');
+              }}
+              style={({ pressed }) => [
+                styles.glassBtn,
+                pressOpacity && pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+              ]}
+            >
+              <Feather name="book-open" size={18} color={palette.primary} />
+              <Text style={styles.glassBtnText}>Protocol library (placeholder)</Text>
+            </Pressable>
+          </View>
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </ScreenBackdrop>
   );
 }
 
-const s = StyleSheet.create({
-  safe:              { flex: 1, backgroundColor: COLORS.bg },
-  scroll:            { paddingHorizontal: 16 },
-  header:            { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 16, paddingBottom: 4 },
-  dot:               { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.red },
-  appName:           { color: COLORS.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 2 },
-  title:             { color: COLORS.text, fontSize: 28, fontWeight: '800', marginTop: 8 },
-  subtitle:          { color: COLORS.textSecondary, fontSize: 14, marginTop: 4, marginBottom: 16 },
-  progressWrap:      { flexDirection: 'row', gap: 6, marginBottom: 20 },
-  progressStep:      { flex: 1, height: 4, borderRadius: 2, backgroundColor: COLORS.border },
-  progressActive:    { backgroundColor: COLORS.accent },
-  card:              { backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: 16, marginBottom: 16 },
-  cardTitle:         { color: COLORS.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 2, marginBottom: 14 },
-  row:               { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  inputGroup:        { flex: 1 },
-  label:             { color: COLORS.textMuted, fontSize: 11, fontWeight: '600', letterSpacing: 1, marginBottom: 6, textTransform: 'uppercase' },
-  input:             { backgroundColor: COLORS.inputBg, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 12, color: COLORS.text, fontSize: 16 },
-  provinceRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderRadius: 12, marginBottom: 8, backgroundColor: COLORS.inputBg, borderWidth: 1, borderColor: COLORS.border },
-  provinceRowActive: { borderColor: COLORS.accent, backgroundColor: COLORS.accentDim },
-  provinceLeft:      { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  provinceName:      { color: COLORS.textSecondary, fontSize: 15, fontWeight: '600' },
-  riskBadge:         { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1 },
-  riskHigh:          { backgroundColor: COLORS.redDim, borderColor: COLORS.red + '40' },
-  riskLow:           { backgroundColor: COLORS.greenDim, borderColor: COLORS.green + '40' },
-  riskText:          { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  warningBox:        { flexDirection: 'row', gap: 10, backgroundColor: COLORS.yellowDim, borderWidth: 1, borderColor: COLORS.yellow + '40', borderRadius: 14, padding: 14, marginBottom: 16 },
-  warningText:       { color: COLORS.textSecondary, fontSize: 13, lineHeight: 20, flex: 1 },
-  nextBtn:           { borderRadius: 14, padding: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  nextText:          { color: '#fff', fontSize: 15, fontWeight: '800', letterSpacing: 1 },
+const styles = StyleSheet.create({
+  scroll: { flex: 1, backgroundColor: 'transparent' },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  dateTiny: {
+    fontFamily: fonts.medium,
+    fontSize: 11,
+    color: palette.textTertiary,
+    letterSpacing: 0.7,
+  },
+  greeting: { fontFamily: fonts.bold, fontSize: 26, color: palette.secondary },
+  subtitle: { fontFamily: fonts.regular, fontSize: 14, color: palette.textSecondary, marginTop: 2 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  wkPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: glass.fillStrong,
+    borderWidth: 1,
+    borderColor: glass.stroke,
+  },
+  wkPillText: { fontFamily: fonts.semibold, fontSize: 13, color: palette.primary },
+  logoutBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: palette.statusAlert,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  section: { gap: 10 },
+  sectionTitle: { fontFamily: fonts.semibold, fontSize: 17, color: palette.secondary },
+  alertRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  alertDot: { width: 10, height: 10, borderRadius: 5 },
+  alertTitle: { fontFamily: fonts.semibold, fontSize: 15, color: palette.secondary },
+  alertDetail: { fontFamily: fonts.regular, fontSize: 13, color: palette.textSecondary, lineHeight: 18 },
+  alertMeta: { fontFamily: fonts.medium, fontSize: 11, color: palette.textTertiary },
+  statusInner: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  statusLabel: { fontFamily: fonts.bold, fontSize: 17, color: palette.secondary },
+  statusMsg: { fontFamily: fonts.regular, fontSize: 14, color: palette.textSecondary, lineHeight: 20 },
+  micro: {
+    fontFamily: fonts.medium,
+    fontSize: 11,
+    color: palette.textTertiary,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+  },
+  stackRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  stackName: { fontFamily: fonts.medium, fontSize: 13, color: palette.textSecondary },
+  stackTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: palette.borderLight,
+    overflow: 'hidden',
+  },
+  stackFill: { height: '100%', borderRadius: 4 },
+  stackPct: { fontFamily: fonts.bold, fontSize: 15, color: palette.secondary, minWidth: 40, textAlign: 'right' },
+  reasoning: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    color: palette.textSecondary,
+    lineHeight: 20,
+    marginTop: 4,
+  },
+  taskRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+  checkbox: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
+    borderColor: glass.stroke,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  checkboxOn: { backgroundColor: palette.statusGood, borderColor: palette.statusGood },
+  taskLabel: { flex: 1, fontFamily: fonts.medium, fontSize: 15, color: palette.secondary },
+  taskDone: {
+    color: palette.textTertiary,
+    textDecorationLine: 'line-through',
+  },
+  aiHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  aiTitle: { fontFamily: fonts.semibold, fontSize: 16, color: palette.primary },
+  aiBody: { fontFamily: fonts.regular, fontSize: 15, color: palette.text, lineHeight: 22 },
+  primaryAction: {
+    backgroundColor: palette.primary,
+    borderRadius: radii.lg,
+    paddingVertical: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  primaryActionText: { fontFamily: fonts.semibold, fontSize: 16, color: palette.white },
+  glassBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: glass.stroke,
+    backgroundColor: glass.fill,
+  },
+  glassBtnText: { fontFamily: fonts.semibold, fontSize: 15, color: palette.secondary },
 });
