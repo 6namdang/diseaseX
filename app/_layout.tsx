@@ -9,6 +9,8 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { LanguageProvider } from '../i18n/LanguageContext';
+import { PatientProvider } from '../state/PatientContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -27,9 +29,11 @@ export default function RootLayout() {
   if (!loaded) return null;
 
   return (
-    <>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }} />
-    </>
+    <LanguageProvider>
+      <PatientProvider>
+        <StatusBar style="dark" />
+        <Stack screenOptions={{ headerShown: false }} />
+      </PatientProvider>
+    </LanguageProvider>
   );
 }
