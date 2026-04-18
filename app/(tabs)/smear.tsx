@@ -246,14 +246,6 @@ export default function SmearScreen() {
                   </Text>
                 </View>
               </View>
-              <View style={styles.disclaimerBox}>
-                <Feather name="info" size={14} color={palette.statusMonitor} />
-                <Text style={styles.disclaimerText}>
-                  <T>
-                    Demo model for the hackathon build. Output is not a clinical diagnosis — confirm with microscopy or RDT before treating.
-                  </T>
-                </Text>
-              </View>
             </GlassCard>
 
             {!photoUri && (
@@ -545,22 +537,6 @@ const styles = StyleSheet.create({
   modelRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   modelTitle: { fontFamily: fonts.semibold, fontSize: 14, color: palette.secondary },
   modelSub: { fontFamily: fonts.regular, fontSize: 12, color: palette.textTertiary, marginTop: 2 },
-  disclaimerBox: {
-    flexDirection: 'row',
-    gap: 8,
-    padding: 10,
-    borderRadius: radii.sm,
-    backgroundColor: `${palette.statusMonitor}14`,
-    borderWidth: 1,
-    borderColor: `${palette.statusMonitor}40`,
-  },
-  disclaimerText: {
-    flex: 1,
-    fontFamily: fonts.regular,
-    fontSize: 12,
-    color: palette.text,
-    lineHeight: 17,
-  },
   captureRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
   primaryBtn: {
     flex: 1,
