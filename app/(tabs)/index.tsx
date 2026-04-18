@@ -14,7 +14,10 @@ import {
 } from 'react-native';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { ScreenBackdrop } from '../../components/ui/ScreenBackdrop';
+import { SettingsSheet } from '../../components/ui/SettingsSheet';
 import { ONBOARDING_KEY } from '../../constants/appStorage';
+import { T } from '../../i18n/T';
+import { usePatient } from '../../state/PatientContext';
 import {
   fonts,
   glass,
@@ -35,6 +38,7 @@ import { useContentInsets } from '../../hooks/useContentInsets';
 
 export default function HomeScreen() {
   const insets = useContentInsets();
+  const { active: activePatient } = usePatient();
   const [status, setStatus] = useState<HealingStatus>('monitor');
   const [tasks, setTasks] = useState(() => MOCK_DASHBOARD_TASKS.map((t) => ({ ...t })));
 
@@ -101,8 +105,11 @@ export default function HomeScreen() {
                 pressOpacity && pressed && { opacity: 0.88, transform: [{ scale: 0.97 }] },
               ]}
             >
-              <Text style={styles.wkPillText}>Mock band</Text>
+              <Text style={styles.wkPillText}>
+                <T>Mock band</T>
+              </Text>
             </Pressable>
+            <SettingsSheet />
             <Pressable
               onPress={logout}
               style={({ pressed }) => [
@@ -116,8 +123,37 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        <GlassCard intensity={32}>
+          <View style={styles.patientRow}>
+            <View
+              style={[
+                styles.patientDot,
+                {
+                  backgroundColor:
+                    activePatient.status === 'good'
+                      ? palette.statusGood
+                      : activePatient.status === 'monitor'
+                        ? palette.statusMonitor
+                        : palette.statusAlert,
+                },
+              ]}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.patientMicro}>
+                <T>Monitoring patient</T>
+              </Text>
+              <Text style={styles.patientTitle}>
+                {activePatient.caseId} · <T>{activePatient.label}</T>
+              </Text>
+            </View>
+            <Feather name="user" size={18} color={palette.primary} />
+          </View>
+        </GlassCard>
+
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Outbreak signals (mock)</Text>
+          <Text style={styles.sectionTitle}>
+            <T>Outbreak signals (mock)</T>
+          </Text>
           <View style={{ gap: 10 }}>
             {MOCK_OUTBREAK_ALERTS.map((a) => (
               <GlassCard key={a.id} intensity={36}>
@@ -132,9 +168,15 @@ export default function HomeScreen() {
                     ]}
                   />
                   <View style={{ flex: 1, gap: 4 }}>
-                    <Text style={styles.alertTitle}>{a.title}</Text>
-                    <Text style={styles.alertDetail}>{a.detail}</Text>
-                    <Text style={styles.alertMeta}>{a.meta}</Text>
+                    <Text style={styles.alertTitle}>
+                      <T>{a.title}</T>
+                    </Text>
+                    <Text style={styles.alertDetail}>
+                      <T>{a.detail}</T>
+                    </Text>
+                    <Text style={styles.alertMeta}>
+                      <T>{a.meta}</T>
+                    </Text>
                   </View>
                   <Feather name="chevron-right" size={18} color={palette.textTertiary} />
                 </View>
@@ -163,18 +205,26 @@ export default function HomeScreen() {
                 }
               />
               <View style={{ flex: 1, gap: 4 }}>
-                <Text style={styles.statusLabel}>{token.label}</Text>
-                <Text style={styles.statusMsg}>{token.message}</Text>
+                <Text style={styles.statusLabel}>
+                  <T>{token.label}</T>
+                </Text>
+                <Text style={styles.statusMsg}>
+                  <T>{token.message}</T>
+                </Text>
               </View>
             </View>
           </GlassCard>
         </Pressable>
 
         <GlassCard intensity={34}>
-          <Text style={styles.micro}>Probability stack (mock)</Text>
+          <Text style={styles.micro}>
+            <T>Probability stack (mock)</T>
+          </Text>
           <View style={styles.stackRow}>
             <View style={{ flex: 1, gap: 6 }}>
-              <Text style={styles.stackName}>{MOCK_RULE_OUT_CARD.primary.name}</Text>
+              <Text style={styles.stackName}>
+                <T>{MOCK_RULE_OUT_CARD.primary.name}</T>
+              </Text>
               <View style={styles.stackTrack}>
                 <View
                   style={[
@@ -188,7 +238,9 @@ export default function HomeScreen() {
           </View>
           <View style={styles.stackRow}>
             <View style={{ flex: 1, gap: 6 }}>
-              <Text style={styles.stackName}>{MOCK_RULE_OUT_CARD.secondary.name}</Text>
+              <Text style={styles.stackName}>
+                <T>{MOCK_RULE_OUT_CARD.secondary.name}</T>
+              </Text>
               <View style={styles.stackTrack}>
                 <View
                   style={[
@@ -203,11 +255,15 @@ export default function HomeScreen() {
             </View>
             <Text style={styles.stackPct}>{MOCK_RULE_OUT_CARD.secondary.pct}%</Text>
           </View>
-          <Text style={styles.reasoning}>{MOCK_RULE_OUT_CARD.reasoning}</Text>
+          <Text style={styles.reasoning}>
+            <T>{MOCK_RULE_OUT_CARD.reasoning}</T>
+          </Text>
         </GlassCard>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Shift tasks (mock)</Text>
+          <Text style={styles.sectionTitle}>
+            <T>Shift tasks (mock)</T>
+          </Text>
           <GlassCard intensity={38}>
             {tasks.map((t) => (
               <Pressable
@@ -221,7 +277,9 @@ export default function HomeScreen() {
                 <View style={[styles.checkbox, t.done && styles.checkboxOn]}>
                   {t.done ? <Feather name="check" size={14} color={palette.white} /> : null}
                 </View>
-                <Text style={[styles.taskLabel, t.done && styles.taskDone]}>{t.label}</Text>
+                <Text style={[styles.taskLabel, t.done && styles.taskDone]}>
+                  <T>{t.label}</T>
+                </Text>
               </Pressable>
             ))}
           </GlassCard>
@@ -230,13 +288,19 @@ export default function HomeScreen() {
         <GlassCard intensity={36}>
           <View style={styles.aiHeader}>
             <Feather name="cpu" size={20} color={palette.primary} />
-            <Text style={styles.aiTitle}>AI triage brief (mock)</Text>
+            <Text style={styles.aiTitle}>
+              <T>AI triage brief (mock)</T>
+            </Text>
           </View>
-          <Text style={styles.aiBody}>{MOCK_AI_BRIEFING}</Text>
+          <Text style={styles.aiBody}>
+            <T>{MOCK_AI_BRIEFING}</T>
+          </Text>
         </GlassCard>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick actions</Text>
+          <Text style={styles.sectionTitle}>
+            <T>Quick actions</T>
+          </Text>
           <View style={{ gap: 12 }}>
             <Pressable
               onPress={() => {
@@ -249,7 +313,9 @@ export default function HomeScreen() {
               ]}
             >
               <Feather name="activity" size={20} color={palette.white} />
-              <Text style={styles.primaryActionText}>New assessment</Text>
+              <Text style={styles.primaryActionText}>
+                <T>New assessment</T>
+              </Text>
             </Pressable>
             <Pressable
               onPress={() => {
@@ -262,7 +328,9 @@ export default function HomeScreen() {
               ]}
             >
               <Feather name="layers" size={18} color={palette.primary} />
-              <Text style={styles.glassBtnText}>Patient queue & signals</Text>
+              <Text style={styles.glassBtnText}>
+                <T>Patient queue & signals</T>
+              </Text>
             </Pressable>
             <Pressable
               onPress={() => {
@@ -275,7 +343,9 @@ export default function HomeScreen() {
               ]}
             >
               <Feather name="message-circle" size={18} color={palette.primary} />
-              <Text style={styles.glassBtnText}>Supervisor & AI desk</Text>
+              <Text style={styles.glassBtnText}>
+                <T>Supervisor & AI desk</T>
+              </Text>
             </Pressable>
             <Pressable
               onPress={() => {
@@ -288,7 +358,9 @@ export default function HomeScreen() {
               ]}
             >
               <Feather name="book-open" size={18} color={palette.primary} />
-              <Text style={styles.glassBtnText}>Protocol library (placeholder)</Text>
+              <Text style={styles.glassBtnText}>
+                <T>Protocol library (placeholder)</T>
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -405,4 +477,14 @@ const styles = StyleSheet.create({
     backgroundColor: glass.fill,
   },
   glassBtnText: { fontFamily: fonts.semibold, fontSize: 15, color: palette.secondary },
+  patientRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  patientDot: { width: 10, height: 10, borderRadius: 5 },
+  patientMicro: {
+    fontFamily: fonts.medium,
+    fontSize: 11,
+    color: palette.textTertiary,
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+  },
+  patientTitle: { fontFamily: fonts.semibold, fontSize: 15, color: palette.secondary, marginTop: 2 },
 });

@@ -6,10 +6,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { GlassCard } from '../components/ui/GlassCard';
 import { ScreenBackdrop } from '../components/ui/ScreenBackdrop';
+import { SettingsSheet } from '../components/ui/SettingsSheet';
 import { ONBOARDING_KEY } from '../constants/appStorage';
 import { fonts, palette, radii, shadow, space } from '../constants/designTokens';
 import { MOCK_WELCOME_FEATURES } from '../data/mockClinical';
 import { useContentInsets } from '../hooks/useContentInsets';
+import { T } from '../i18n/T';
 
 export default function WelcomeScreen() {
   const insets = useContentInsets();
@@ -37,6 +39,10 @@ export default function WelcomeScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.langRow}>
+          <SettingsSheet />
+        </View>
+
         <View style={styles.topBlock}>
           <LinearGradient
             colors={[palette.primary, palette.primaryLight]}
@@ -47,7 +53,9 @@ export default function WelcomeScreen() {
             <Feather name="aperture" size={40} color={palette.white} />
           </LinearGradient>
           <Text style={styles.appName}>DiseaseX</Text>
-          <Text style={styles.tagline}>Triage & protocol engine — rule out the known, treat the urgent.</Text>
+          <Text style={styles.tagline}>
+            <T>Triage & protocol engine — rule out the known, treat the urgent.</T>
+          </Text>
         </View>
 
         <View style={styles.midBlock}>
@@ -58,8 +66,12 @@ export default function WelcomeScreen() {
                   <Feather name={f.icon} size={22} color={palette.primary} />
                 </View>
                 <View style={styles.featureText}>
-                  <Text style={styles.featureTitle}>{f.title}</Text>
-                  <Text style={styles.featureDesc}>{f.desc}</Text>
+                  <Text style={styles.featureTitle}>
+                    <T>{f.title}</T>
+                  </Text>
+                  <Text style={styles.featureDesc}>
+                    <T>{f.desc}</T>
+                  </Text>
                 </View>
               </View>
             </GlassCard>
@@ -68,8 +80,9 @@ export default function WelcomeScreen() {
 
         <View style={styles.bottomBlock}>
           <Text style={styles.disclaimer}>
-            Mock build: supports training flows only. Clinical decisions remain with licensed providers and national
-            guidelines.
+            <T>
+              Mock build: supports training flows only. Clinical decisions remain with licensed providers and national guidelines.
+            </T>
           </Text>
           <Pressable
             onPress={finish}
@@ -78,7 +91,9 @@ export default function WelcomeScreen() {
               pressFx && pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
             ]}
           >
-            <Text style={styles.ctaText}>Enter field desk</Text>
+            <Text style={styles.ctaText}>
+              <T>Enter field desk</T>
+            </Text>
             <Feather name="arrow-right" size={20} color={palette.white} />
           </Pressable>
         </View>
@@ -90,6 +105,7 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: 'transparent' },
   content: { flexGrow: 1, justifyContent: 'space-between' },
+  langRow: { alignItems: 'flex-end' },
   topBlock: { alignItems: 'center', gap: 12 },
   logoWrap: {
     width: 92,
