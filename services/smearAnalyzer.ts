@@ -39,9 +39,9 @@ const HF_SPACE_URL = 'https://nishantjain12345-malaria-detector.hf.space';
 const ANTHROPIC_API_KEY = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 
-export const MODEL_ID = 'mobilenetv2-nih-v1 + claude-vision';
+export const MODEL_ID = 'mobilenetv2-nih-v1 + stage-analyzer';
 export const MODEL_DISPLAY_NAME =
-  'MobileNetV2 (NIH, 92.14% val.) + Claude Vision';
+  'MobileNetV2 (NIH, 92.14% val.) + Stage Analyzer';
 
 // ---------------------------------------------------------------------------
 // Public types — preserved exactly from the previous implementation.
@@ -441,7 +441,7 @@ export async function analyzeSmear(
 
   if (!hfOk && !claudeOk) {
     recommendation =
-      'Could not reach the classifier or Claude Vision. Re-try on a stable connection.';
+      'Could not reach the classifier or stage analyzer. Re-try on a stable connection.';
   }
 
   return {
