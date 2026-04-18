@@ -4,7 +4,6 @@ import { Tabs } from 'expo-router';
 import { Platform, StyleSheet, View } from 'react-native';
 import { fonts, glass, palette } from '../../constants/designTokens';
 import { useContentInsets } from '../../hooks/useContentInsets';
-
 export default function TabLayout() {
   const insets = useContentInsets();
   return (
@@ -46,6 +45,13 @@ export default function TabLayout() {
         options={{
           title: 'Assess',
           tabBarIcon: ({ color, size }) => <Feather name="activity" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="smear"
+        options={{
+          title: 'Smear',
+          tabBarIcon: ({ color, size }) => <Feather name="aperture" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
