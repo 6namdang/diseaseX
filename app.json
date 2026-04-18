@@ -31,7 +31,8 @@
         {
           "photosPermission": "Allow access to photos for recovery documentation."
         }
-      ]
+      ],
+      "expo-sqlite"
     ]
   }
 }

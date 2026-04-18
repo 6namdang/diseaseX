@@ -17,6 +17,7 @@ import { GlassCard } from '../../components/ui/GlassCard';
 import { ScreenBackdrop } from '../../components/ui/ScreenBackdrop';
 import { SettingsSheet } from '../../components/ui/SettingsSheet';
 import { fonts, glass, palette, radii, space } from '../../constants/designTokens';
+import { saveAssessment } from '../../db/assessments';
 import {
   computeTriage,
   QUESTIONNAIRE,
@@ -60,13 +61,14 @@ const TRIAGE_META: Record<
 
 export default function AssessmentsScreen() {
   const insets = useContentInsets();
-  const { active: patient } = usePatient();
+  const { active: patient, ready, refresh } = usePatient();
 
   const [step, setStep] = useState<Step>(0);
   const [answers, setAnswers] = useState<Answers>({});
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [submitted, setSubmitted] = useState<TriageLevel | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const setAnswer = (qid: string, aid: AnswerId) => {
     if (Platform.OS !== 'web') Haptics.selectionAsync();
@@ -84,9 +86,27 @@ export default function AssessmentsScreen() {
 
   const triage = useMemo(() => computeTriage(answers), [answers]);
 
-  const submit = () => {
+  const submit = async () => {
+    if (!patient) return;
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setSubmitted(triage.level);
+    try {
+      setSaving(true);
+      await saveAssessment({
+        patientId: patient.id,
+        answers,
+        triageLevel: triage.level,
+        triageScore: triage.score,
+        triageReasons: triage.reasons,
+        notes: notes.trim() ? notes.trim() : null,
+        photoUri,
+      });
+      await refresh();
+      setSubmitted(triage.level);
+    } catch (e) {
+      Alert.alert('Could not save assessment', String(e));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const reset = () => {
@@ -100,7 +120,7 @@ export default function AssessmentsScreen() {
   const goNext = () => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isFinalReviewStep) {
-      submit();
+      void submit();
       return;
     }
     if (!cardComplete(step)) {
@@ -130,6 +150,49 @@ export default function AssessmentsScreen() {
   };
 
   const pressFx = Platform.OS !== 'web';
+
+  if (!ready) {
+    return (
+      <ScreenBackdrop>
+        <View style={[styles.root, styles.center, { paddingTop: insets.top }]}>
+          <Text style={styles.helperText}>
+            <T>Loading…</T>
+          </Text>
+        </View>
+      </ScreenBackdrop>
+    );
+  }
+
+  if (!patient) {
+    return (
+      <ScreenBackdrop>
+        <View style={[styles.root, { paddingTop: insets.top }]}>
+          <View style={styles.headerRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.headerMicro}>
+                <T>Assessment</T>
+              </Text>
+              <Text style={styles.headerTitle}>
+                <T>No patient selected</T>
+              </Text>
+            </View>
+            <SettingsSheet />
+          </View>
+          <View style={[styles.center, { flex: 1, padding: space.padH }]}>
+            <Feather name="user-plus" size={36} color={palette.primary} />
+            <Text style={[styles.cardTitle, { marginTop: 12, textAlign: 'center' }]}>
+              <T>Add a patient to start</T>
+            </Text>
+            <Text style={[styles.cardSub, { textAlign: 'center', marginTop: 6 }]}>
+              <T>
+                Open settings (top right) to create your first patient. All data stays on this device.
+              </T>
+            </Text>
+          </View>
+        </View>
+      </ScreenBackdrop>
+    );
+  }
 
   if (submitted) {
     return (
@@ -299,14 +362,16 @@ export default function AssessmentsScreen() {
             </Pressable>
           )}
           <Pressable
+            disabled={saving}
             onPress={goNext}
             style={({ pressed }) => [
               styles.footerBtn,
+              saving && { opacity: 0.7 },
               pressFx && pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
             ]}
           >
             <Text style={styles.footerBtnText}>
-              <T>{isFinalReviewStep ? 'Submit & triage' : 'Continue'}</T>
+              <T>{isFinalReviewStep ? (saving ? 'Saving…' : 'Submit & triage') : 'Continue'}</T>
             </Text>
             <Feather name="arrow-right" size={20} color={palette.white} />
           </Pressable>
@@ -490,6 +555,7 @@ function TriageResultView({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: 'transparent' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { flex: 1, backgroundColor: 'transparent' },
   headerRow: {
     flexDirection: 'row',

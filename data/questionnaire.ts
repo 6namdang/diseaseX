@@ -166,14 +166,6 @@ export const QUESTIONNAIRE: QuestionCard[] = [
         urgentIfAnswers: ['yes'],
       },
       {
-        id: 'severe_vomiting',
-        text: 'Is the person vomiting again and again, or unable to keep liquids down?',
-        helper: 'This is more serious than vomiting once or twice.',
-        options: YES_NO_UNSURE,
-        severityWeight: 3,
-        urgentIfAnswers: ['yes'],
-      },
-      {
         id: 'visible_bleeding',
         text: 'Is there bleeding from nose, gums, vomit, stool, or a wound?',
         helper: 'Any unusual bleeding should count.',

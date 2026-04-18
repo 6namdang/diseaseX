@@ -69,6 +69,14 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="smear"
+        options={{
+          title: 'Smear',
+          tabBarLabel: ({ color }) => <TabLabel source="Smear" color={color} />,
+          tabBarIcon: ({ color, size }) => <Feather name="aperture" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="logs"
         options={{
           title: 'Queue',
