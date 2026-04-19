@@ -1,6 +1,6 @@
 import { BlurView } from 'expo-blur';
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { glass, radii } from '../../constants/designTokens';
+import { glass, radii, surface } from '../../constants/designTokens';
 
 type Props = {
   children: React.ReactNode;
@@ -10,8 +10,8 @@ type Props = {
   intensity?: number;
 };
 
-export function GlassCard({ children, style, contentStyle, intensity = 42 }: Props) {
-  const r = radii.lg;
+export function GlassCard({ children, style, contentStyle, intensity = 32 }: Props) {
+  const r = radii.card;
 
   if (Platform.OS === 'web') {
     return (
@@ -25,9 +25,16 @@ export function GlassCard({ children, style, contentStyle, intensity = 42 }: Pro
     <View style={[styles.outer, { borderRadius: r }, style]}>
       <BlurView
         intensity={intensity}
-        tint="light"
+        tint="dark"
         experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : undefined}
         style={[StyleSheet.absoluteFillObject, { borderRadius: r }]}
+      />
+      <View
+        pointerEvents="none"
+        style={[
+          styles.topHighlight,
+          { borderTopLeftRadius: r, borderTopRightRadius: r },
+        ]}
       />
       <View style={[styles.inner, { borderRadius: r }, contentStyle]}>{children}</View>
     </View>
@@ -37,22 +44,30 @@ export function GlassCard({ children, style, contentStyle, intensity = 42 }: Pro
 const styles = StyleSheet.create({
   outer: {
     overflow: 'hidden',
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: glass.stroke,
-    backgroundColor: glass.fill,
+    backgroundColor: surface.base,
   },
   inner: {
     padding: 16,
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.02)',
+  },
+  topHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
   webOuter: {
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: glass.stroke,
-    backgroundColor: glass.fillStrong,
+    backgroundColor: surface.elevated,
     overflow: 'hidden',
   },
   webInner: {
     padding: 16,
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
 });

@@ -1002,7 +1002,7 @@ const styles = StyleSheet.create({
   appName: {
     fontFamily: fonts.bold,
     fontSize: 24,
-    color: palette.secondary,
+    color: palette.text,
     textAlign: 'center',
   },
   tagline: {
@@ -1039,7 +1039,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   multiline: { minHeight: 64, textAlignVertical: 'top' },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -1049,7 +1049,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   chipActive: {
     backgroundColor: palette.primary,
@@ -1058,7 +1058,7 @@ const styles = StyleSheet.create({
   chipText: {
     fontFamily: fonts.medium,
     fontSize: 14,
-    color: palette.secondary,
+    color: palette.text,
     textTransform: 'capitalize',
   },
   chipTextActive: { color: palette.white },
@@ -1066,7 +1066,7 @@ const styles = StyleSheet.create({
   locTitle: {
     fontFamily: fonts.semibold,
     fontSize: 18,
-    color: palette.secondary,
+    color: palette.text,
     textAlign: 'center',
   },
   locSubtitle: {
@@ -1112,7 +1112,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingTop: 12,
-    backgroundColor: 'rgba(248,250,252,0.9)',
+    backgroundColor: 'rgba(10,14,26,0.92)',
     borderTopWidth: 1,
     borderTopColor: palette.border,
   },
@@ -1123,7 +1123,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 14,
   },
-  backText: { fontFamily: fonts.medium, fontSize: 14, color: palette.secondary },
+  backText: { fontFamily: fonts.medium, fontSize: 14, color: palette.text },
   cta: {
     flex: 1,
     flexDirection: 'row',
@@ -1134,7 +1134,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     paddingVertical: 16,
   },
-  ctaText: { fontFamily: fonts.semibold, fontSize: 16, color: palette.white },
+  ctaText: { fontFamily: fonts.semibold, fontSize: 16, color: '#062A1B' },
 
   helpText: {
     fontFamily: fonts.regular,

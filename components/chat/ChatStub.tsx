@@ -55,7 +55,7 @@ export default function ChatStub() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: 'transparent' },
   header: { paddingHorizontal: space.padH, paddingBottom: 12, gap: 6 },
-  title: { fontFamily: fonts.bold, fontSize: 24, color: palette.secondary },
+  title: { fontFamily: fonts.bold, fontSize: 24, color: palette.text },
   hint: {
     fontFamily: fonts.regular,
     fontSize: 12,
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontFamily: fonts.semibold,
     fontSize: 17,
-    color: palette.secondary,
+    color: palette.text,
     textAlign: 'center',
   },
   cardBody: {

@@ -139,7 +139,7 @@ export default function HomeScreen() {
                 style={styles.primaryBtn}
               >
                 <Text style={styles.primaryBtnText}><T>Start assessment</T></Text>
-                <Feather name="arrow-right" size={16} color={palette.white} />
+                <Feather name="arrow-right" size={16} color="#062A1B" />
               </Pressable>
             </View>
           </GlassCard>
@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: palette.textSecondary,
   },
-  greetingBold: { fontFamily: fonts.bold, color: palette.secondary },
+  greetingBold: { fontFamily: fonts.bold, color: palette.text },
   subgreeting: {
     fontFamily: fonts.regular,
     fontSize: 13,
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontFamily: fonts.semibold,
     fontSize: 15,
-    color: palette.secondary,
+    color: palette.text,
     marginBottom: 6,
   },
   cardBody: {
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: radii.md,
     borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.75)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     gap: 2,
   },
   statLabel: {
@@ -406,12 +406,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: radii.md,
   },
-  primaryBtnText: { fontFamily: fonts.semibold, color: palette.white, fontSize: 14 },
+  primaryBtnText: { fontFamily: fonts.semibold, color: '#062A1B', fontSize: 14 },
   actionsRow: { flexDirection: 'row', justifyContent: 'space-around' },
   actionLink: { alignItems: 'center', gap: 6, paddingVertical: 4 },
   actionLinkText: {
     fontFamily: fonts.medium,
     fontSize: 12,
-    color: palette.secondary,
+    color: palette.text,
   },
 });

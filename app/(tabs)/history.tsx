@@ -276,11 +276,11 @@ function formatDateTime(ts: number): string {
 
 const styles = StyleSheet.create({
   content: { gap: 14 },
-  h1: { fontFamily: fonts.bold, fontSize: 22, color: palette.secondary },
+  h1: { fontFamily: fonts.bold, fontSize: 22, color: palette.text },
   sub: { fontFamily: fonts.regular, fontSize: 13, color: palette.textSecondary },
   empty: { fontFamily: fonts.medium, fontSize: 14, color: palette.textTertiary },
   row: { flexDirection: 'row', alignItems: 'center' },
-  when: { fontFamily: fonts.semibold, fontSize: 14, color: palette.secondary },
+  when: { fontFamily: fonts.semibold, fontSize: 14, color: palette.text },
   sev: {
     fontFamily: fonts.regular,
     fontSize: 13,
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontFamily: fonts.semibold,
     fontSize: 13,
-    color: palette.secondary,
+    color: palette.text,
   },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   tagChip: {
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   alertChip: {
     borderColor: palette.statusAlert,
@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
   tagChipText: {
     fontFamily: fonts.medium,
     fontSize: 12,
-    color: palette.secondary,
+    color: palette.text,
     textTransform: 'capitalize',
   },
   thumbWrap: { gap: 2 },

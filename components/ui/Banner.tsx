@@ -14,27 +14,27 @@ type Props = {
 
 const TONES: Record<BannerTone, { bg: string; border: string; text: string; iconColor: string }> = {
   info: {
-    bg: 'rgba(13,148,136,0.10)',
-    border: 'rgba(13,148,136,0.30)',
-    text: palette.secondary,
+    bg: 'rgba(0,229,204,0.10)',
+    border: 'rgba(0,229,204,0.25)',
+    text: palette.text,
     iconColor: palette.primary,
   },
   warning: {
-    bg: 'rgba(217,119,6,0.12)',
-    border: 'rgba(217,119,6,0.35)',
-    text: '#7C2D12',
+    bg: 'rgba(245,158,11,0.12)',
+    border: 'rgba(245,158,11,0.30)',
+    text: palette.text,
     iconColor: palette.statusMonitor,
   },
   danger: {
-    bg: 'rgba(220,38,38,0.10)',
-    border: 'rgba(220,38,38,0.35)',
-    text: '#7F1D1D',
+    bg: 'rgba(239,68,68,0.12)',
+    border: 'rgba(239,68,68,0.30)',
+    text: palette.text,
     iconColor: palette.statusAlert,
   },
   success: {
-    bg: 'rgba(5,150,105,0.10)',
-    border: 'rgba(5,150,105,0.30)',
-    text: '#14532D',
+    bg: 'rgba(34,197,94,0.10)',
+    border: 'rgba(34,197,94,0.25)',
+    text: palette.text,
     iconColor: palette.statusGood,
   },
 };

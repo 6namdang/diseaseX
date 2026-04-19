@@ -2,9 +2,28 @@ import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
 import { Platform, StyleSheet, View } from 'react-native';
-import { fonts, glass, palette } from '../../constants/designTokens';
+import { fonts, glass, palette, signal } from '../../constants/designTokens';
 import { useContentInsets } from '../../hooks/useContentInsets';
 import { useT } from '../../i18n/LanguageContext';
+
+function TabIcon({
+  name,
+  color,
+  size,
+  focused,
+}: {
+  name: keyof typeof Feather.glyphMap;
+  color: string;
+  size: number;
+  focused: boolean;
+}) {
+  return (
+    <View style={styles.iconWrap}>
+      {focused && <View style={styles.activeGlow} />}
+      <Feather name={name} size={size} color={color} />
+    </View>
+  );
+}
 
 export default function TabLayout() {
   const insets = useContentInsets();
@@ -17,27 +36,26 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: palette.primary,
+        tabBarActiveTintColor: signal.base,
         tabBarInactiveTintColor: palette.textTertiary,
         tabBarStyle: {
-          backgroundColor:
-            Platform.OS === 'ios' ? 'rgba(248,250,252,0.4)' : 'rgba(248,250,252,0.94)',
+          backgroundColor: 'rgba(7,8,11,0.75)',
           borderTopColor: glass.strokeSoft,
-          borderTopWidth: 1,
-          height: 64 + insets.bottom,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          height: 68 + insets.bottom,
           paddingBottom: insets.bottom + 6,
-          paddingTop: 8,
+          paddingTop: 10,
         },
         tabBarBackground: () =>
           Platform.OS === 'ios' ? (
-            <BlurView intensity={28} tint="light" style={StyleSheet.absoluteFill} />
+            <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
           ) : (
-            <View style={{ flex: 1, backgroundColor: 'rgba(248,250,252,0.92)' }} />
+            <View style={{ flex: 1, backgroundColor: 'rgba(7,8,11,0.95)' }} />
           ),
         tabBarLabelStyle: {
           fontFamily: fonts.medium,
-          fontSize: 11,
-          letterSpacing: 0.2,
+          fontSize: 10,
+          letterSpacing: 0.4,
         },
       }}
     >
@@ -45,15 +63,17 @@ export default function TabLayout() {
         name="index"
         options={{
           title: tHome,
-          tabBarIcon: ({ color, size }) => <Feather name="home" size={size} color={color} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="home" color={color} size={size} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="assessments"
         options={{
           title: tAssess,
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="activity" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="activity" color={color} size={size} focused={focused} />
           ),
         }}
       />
@@ -61,8 +81,8 @@ export default function TabLayout() {
         name="smear"
         options={{
           title: tSmear,
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="droplet" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="droplet" color={color} size={size} focused={focused} />
           ),
         }}
       />
@@ -70,8 +90,8 @@ export default function TabLayout() {
         name="chat"
         options={{
           title: tChat,
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="message-circle" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="message-circle" color={color} size={size} focused={focused} />
           ),
         }}
       />
@@ -79,9 +99,27 @@ export default function TabLayout() {
         name="history"
         options={{
           title: tHistory,
-          tabBarIcon: ({ color, size }) => <Feather name="list" size={size} color={color} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="list" color={color} size={size} focused={focused} />
+          ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  iconWrap: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeGlow: {
+    position: 'absolute',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: signal.glowSoft,
+  },
+});

@@ -724,7 +724,7 @@ const styles = StyleSheet.create({
   empty: { gap: 14 },
   content: { gap: 14 },
   headerBlock: { gap: 6, marginBottom: 2 },
-  h1: { fontFamily: fonts.bold, fontSize: 22, color: palette.secondary },
+  h1: { fontFamily: fonts.bold, fontSize: 22, color: palette.text },
   sub: {
     fontFamily: fonts.regular,
     fontSize: 13,
@@ -734,7 +734,7 @@ const styles = StyleSheet.create({
   cardH: {
     fontFamily: fonts.semibold,
     fontSize: 15,
-    color: palette.secondary,
+    color: palette.text,
     marginBottom: 4,
   },
   qLabel: { fontFamily: fonts.medium, fontSize: 13, color: palette.textSecondary },
@@ -747,7 +747,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   yn: {
     paddingVertical: 8,
@@ -755,11 +755,11 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   ynYes: { backgroundColor: palette.statusAlert, borderColor: palette.statusAlert },
   ynNo: { backgroundColor: palette.primary, borderColor: palette.primary },
-  ynText: { fontFamily: fonts.medium, fontSize: 14, color: palette.secondary },
+  ynText: { fontFamily: fonts.medium, fontSize: 14, color: palette.text },
   ynTextActive: { color: palette.white },
   symptomGrid: {
     flexDirection: 'row',
@@ -776,13 +776,13 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   symptomChipActive: {
     backgroundColor: palette.primary,
     borderColor: palette.primary,
   },
-  symptomChipText: { fontFamily: fonts.medium, fontSize: 13, color: palette.secondary },
+  symptomChipText: { fontFamily: fonts.medium, fontSize: 13, color: palette.text },
   symptomChipTextActive: { color: palette.white },
   rfRow: {
     flexDirection: 'row',
@@ -790,7 +790,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
-  rfQ: { flex: 1, fontFamily: fonts.regular, fontSize: 13, color: palette.secondary },
+  rfQ: { flex: 1, fontFamily: fonts.regular, fontSize: 13, color: palette.text },
   photoRow: {
     flexDirection: 'row',
     gap: 10,
@@ -799,12 +799,12 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   photoLabel: {
     fontFamily: fonts.medium,
     fontSize: 13,
-    color: palette.secondary,
+    color: palette.text,
     marginBottom: 6,
   },
   thumb: {
@@ -821,7 +821,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   submitBar: {
     position: 'absolute',
@@ -829,7 +829,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingTop: 12,
-    backgroundColor: 'rgba(248,250,252,0.92)',
+    backgroundColor: 'rgba(10,14,26,0.92)',
     borderTopWidth: 1,
     borderTopColor: palette.border,
   },
@@ -842,12 +842,12 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: radii.md,
   },
-  submitText: { fontFamily: fonts.semibold, fontSize: 16, color: palette.white },
+  submitText: { fontFamily: fonts.semibold, fontSize: 16, color: '#062A1B' },
 
   resTitle: {
     fontFamily: fonts.bold,
     fontSize: 20,
-    color: palette.secondary,
+    color: palette.text,
     textAlign: 'center',
   },
   resSeverity: {

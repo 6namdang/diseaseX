@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: palette.white,
+    backgroundColor: '#1E293B',
     borderTopLeftRadius: radii.xl,
     borderTopRightRadius: radii.xl,
     padding: 20,
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
-  title: { fontFamily: fonts.bold, fontSize: 22, color: palette.secondary },
+  title: { fontFamily: fonts.bold, fontSize: 22, color: palette.text },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -377,9 +377,9 @@ const styles = StyleSheet.create({
   },
   cardWrap: {
     borderWidth: 1,
-    borderColor: palette.borderLight,
+    borderColor: glass.stroke,
     borderRadius: radii.md,
-    backgroundColor: 'rgba(248,250,252,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     overflow: 'hidden',
   },
   row: {
@@ -388,10 +388,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 14,
     borderBottomWidth: 1,
-    borderBottomColor: palette.borderLight,
+    borderBottomColor: glass.stroke,
     gap: 12,
   },
-  rowName: { fontFamily: fonts.semibold, fontSize: 15, color: palette.secondary },
+  rowName: { fontFamily: fonts.semibold, fontSize: 15, color: palette.text },
   rowNameActive: { color: palette.primary },
   rowMeta: {
     fontFamily: fonts.regular,
@@ -416,10 +416,10 @@ const styles = StyleSheet.create({
   },
   emptyCard: {
     borderWidth: 1,
-    borderColor: palette.borderLight,
+    borderColor: glass.stroke,
     borderRadius: radii.md,
     padding: 16,
-    backgroundColor: 'rgba(248,250,252,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   actionsRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
   secondaryBtn: {
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
     borderWidth: 1,
     borderColor: glass.stroke,
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   secondaryBtnText: { fontFamily: fonts.semibold, fontSize: 13, color: palette.primary },
   primaryBtn: {
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
     backgroundColor: palette.primary,
     alignSelf: 'flex-start',
   },
-  primaryBtnText: { fontFamily: fonts.semibold, fontSize: 13, color: palette.white },
+  primaryBtnText: { fontFamily: fonts.semibold, fontSize: 13, color: '#062A1B' },
   dangerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
