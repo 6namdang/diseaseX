@@ -31,40 +31,33 @@ import {
 import type { RedFlagKey, SymptomPhotoTag } from '../../db/types';
 import { useContentInsets } from '../../hooks/useContentInsets';
 import { usePatient } from '../../hooks/usePatient';
+import { T } from '../../i18n/T';
+import { useT } from '../../i18n/LanguageContext';
 import {
   runEscalation,
   type EscalationOutcome,
 } from '../../services/escalationService';
 
-const SYMPTOM_OPTIONS: { key: string; label: string; icon: keyof typeof Feather.glyphMap }[] = [
-  { key: 'fever', label: 'Fever', icon: 'thermometer' },
-  { key: 'chills', label: 'Chills / shivering', icon: 'wind' },
-  { key: 'headache', label: 'Headache', icon: 'zap' },
-  { key: 'muscle_pain', label: 'Muscle/joint pain', icon: 'activity' },
-  { key: 'fatigue', label: 'Fatigue', icon: 'battery-charging' },
-  { key: 'nausea', label: 'Nausea', icon: 'alert-circle' },
-  { key: 'diarrhea', label: 'Diarrhea', icon: 'droplet' },
-  { key: 'cough', label: 'Cough', icon: 'mic-off' },
-];
-
-const RED_FLAG_DEFS: {
-  key: RedFlagKey;
-  question: string;
-}[] = [
-  { key: 'confused', question: 'Feeling confused or unusually drowsy?' },
-  { key: 'seizures', question: 'Any seizures?' },
-  { key: 'unable_to_walk', question: 'Unable to sit up or walk without help?' },
-  { key: 'dark_urine', question: 'Is your urine dark brown or black?' },
-  { key: 'yellow_eyes', question: 'Are your eyes or skin yellow?' },
-  { key: 'persistent_vomiting', question: 'Vomiting and cannot keep fluids down?' },
-];
-
-const PHOTO_SLOTS: { tag: SymptomPhotoTag; label: string }[] = [
-  { tag: 'eyes', label: 'Eyes (check for yellow)' },
-  { tag: 'urine', label: 'Urine colour' },
-  { tag: 'palm', label: 'Palms (pallor check)' },
-  { tag: 'skin', label: 'Skin / rash' },
-];
+const SYMPTOM_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
+  fever: 'thermometer',
+  chills: 'wind',
+  headache: 'zap',
+  muscle_pain: 'activity',
+  fatigue: 'battery-charging',
+  nausea: 'alert-circle',
+  diarrhea: 'droplet',
+  cough: 'mic-off',
+};
+const SYMPTOM_KEYS = [
+  'fever',
+  'chills',
+  'headache',
+  'muscle_pain',
+  'fatigue',
+  'nausea',
+  'diarrhea',
+  'cough',
+] as const;
 
 type Photo = { tag: SymptomPhotoTag; uri: string };
 
@@ -113,6 +106,54 @@ export default function AssessmentsScreen() {
     trend: 'better' | 'worse' | 'same' | null;
   } | null>(null);
 
+  const symptomLabels: Record<string, string> = {
+    fever: useT('Fever'),
+    chills: useT('Chills / shivering'),
+    headache: useT('Headache'),
+    muscle_pain: useT('Muscle/joint pain'),
+    fatigue: useT('Fatigue'),
+    nausea: useT('Nausea'),
+    diarrhea: useT('Diarrhea'),
+    cough: useT('Cough'),
+  };
+  const redFlagQuestions: Record<RedFlagKey, string> = {
+    confused: useT('Feeling confused or unusually drowsy?'),
+    seizures: useT('Any seizures?'),
+    unable_to_walk: useT('Unable to sit up or walk without help?'),
+    dark_urine: useT('Is your urine dark brown or black?'),
+    yellow_eyes: useT('Are your eyes or skin yellow?'),
+    persistent_vomiting: useT('Vomiting and cannot keep fluids down?'),
+  };
+  const photoSlotLabels: Record<SymptomPhotoTag, string> = {
+    eyes: useT('Eyes (check for yellow)'),
+    urine: useT('Urine colour'),
+    palm: useT('Palms (pallor check)'),
+    skin: useT('Skin / rash'),
+    other: useT('Other'),
+  };
+  const photoSlotTags: SymptomPhotoTag[] = ['eyes', 'urine', 'palm', 'skin'];
+
+  const tFinishOnboardingTitle = useT('Finish onboarding first');
+  const tFinishOnboardingMsg = useT(
+    'Please complete the welcome steps so the app can tailor dosing and escalations to you.',
+  );
+  const tFeverTempPlaceholder = useT('e.g. 38.7');
+  const tDaysPlaceholder = useT('e.g. 2');
+  const tNotesPlaceholder = useT('Anything else the clinician should know?');
+  const tCamPermTitle = useT('Camera permission required');
+  const tCamPermMsg = useT('Enable camera access in Settings.');
+  const tLibPermTitle = useT('Photo library permission required');
+  const tPhotoErrTitle = useT('Photo error');
+  const tSaveErrTitle = useT('Could not save assessment');
+  const tUnknownErr = useT('Unknown error');
+  const tYes = useT('Yes');
+  const tNo = useT('No');
+  const tQFever = useT('Do you have a fever?');
+  const tQFeverTemp = useT('Temperature (°C) — if you measured it');
+  const tQVomit = useT('Are you vomiting?');
+  const tQFluids = useT('Can you keep water down?');
+  const tQOnset = useT('How many days ago did symptoms start?');
+
   if (!patient || !patient.onboardingCompletedAt) {
     return (
       <ScreenBackdrop>
@@ -124,8 +165,8 @@ export default function AssessmentsScreen() {
         >
           <Banner
             tone="warning"
-            title="Finish onboarding first"
-            message="Please complete the welcome steps so the app can tailor dosing and escalations to you."
+            title={tFinishOnboardingTitle}
+            message={tFinishOnboardingMsg}
           />
         </View>
       </ScreenBackdrop>
@@ -159,7 +200,7 @@ export default function AssessmentsScreen() {
       if (source === 'camera') {
         const perm = await ImagePicker.requestCameraPermissionsAsync();
         if (!perm.granted) {
-          Alert.alert('Camera permission required', 'Enable camera access in Settings.');
+          Alert.alert(tCamPermTitle, tCamPermMsg);
           return;
         }
         res = await ImagePicker.launchCameraAsync({
@@ -169,7 +210,7 @@ export default function AssessmentsScreen() {
       } else {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) {
-          Alert.alert('Photo library permission required');
+          Alert.alert(tLibPermTitle);
           return;
         }
         res = await ImagePicker.launchImageLibraryAsync({
@@ -185,7 +226,7 @@ export default function AssessmentsScreen() {
         photos: [...prev.photos.filter((p) => p.tag !== tag), { tag, uri }],
       }));
     } catch (e: any) {
-      Alert.alert('Photo error', e?.message ?? 'Unknown error');
+      Alert.alert(tPhotoErrTitle, e?.message ?? tUnknownErr);
     }
   }
 
@@ -242,7 +283,7 @@ export default function AssessmentsScreen() {
       setResult({ severity, outcome, trend });
       setForm(initialState);
     } catch (e: any) {
-      Alert.alert('Could not save assessment', e?.message ?? 'Unknown error');
+      Alert.alert(tSaveErrTitle, e?.message ?? tUnknownErr);
     } finally {
       setSaving(false);
     }
@@ -282,70 +323,78 @@ export default function AssessmentsScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.headerBlock}>
-            <Text style={styles.h1}>How are you feeling today?</Text>
+            <Text style={styles.h1}><T>How are you feeling today?</T></Text>
             <Text style={styles.sub}>
-              Takes about a minute. Be honest — this drives the advice and whether your
-              clinician is alerted.
+              <T>
+                Takes about a minute. Be honest — this drives the advice and whether your
+                clinician is alerted.
+              </T>
             </Text>
           </View>
 
           <GlassCard>
-            <Text style={styles.cardH}>Key vitals</Text>
-            <Question label="Do you have a fever?">
+            <Text style={styles.cardH}><T>Key vitals</T></Text>
+            <Question label={tQFever}>
               <YesNo
                 value={form.fever}
                 onChange={(v) => update('fever', v)}
+                yesLabel={tYes}
+                noLabel={tNo}
               />
             </Question>
             {form.fever && (
-              <Question label="Temperature (°C) — if you measured it">
+              <Question label={tQFeverTemp}>
                 <TextInput
                   value={form.feverTemp}
                   onChangeText={(t) => update('feverTemp', sanitizeDecimal(t))}
                   style={styles.input}
                   keyboardType="decimal-pad"
-                  placeholder="e.g. 38.7"
+                  placeholder={tFeverTempPlaceholder}
                   placeholderTextColor={palette.textTertiary}
                 />
               </Question>
             )}
-            <Question label="Are you vomiting?">
+            <Question label={tQVomit}>
               <YesNo
                 value={form.vomiting}
                 onChange={(v) => update('vomiting', v)}
+                yesLabel={tYes}
+                noLabel={tNo}
               />
             </Question>
-            <Question label="Can you keep water down?">
+            <Question label={tQFluids}>
               <YesNo
                 value={form.canKeepFluidsDown}
                 onChange={(v) => update('canKeepFluidsDown', v)}
+                yesLabel={tYes}
+                noLabel={tNo}
               />
             </Question>
-            <Question label="How many days ago did symptoms start?">
+            <Question label={tQOnset}>
               <TextInput
                 value={form.symptomOnsetDays}
                 onChangeText={(t) => update('symptomOnsetDays', t.replace(/[^0-9]/g, ''))}
                 style={styles.input}
                 keyboardType="number-pad"
-                placeholder="e.g. 2"
+                placeholder={tDaysPlaceholder}
                 placeholderTextColor={palette.textTertiary}
               />
             </Question>
           </GlassCard>
 
           <GlassCard>
-            <Text style={styles.cardH}>Symptoms — tap all that apply</Text>
+            <Text style={styles.cardH}><T>Symptoms — tap all that apply</T></Text>
             <View style={styles.symptomGrid}>
-              {SYMPTOM_OPTIONS.map((s) => {
-                const active = form.selectedSymptoms.has(s.key);
+              {SYMPTOM_KEYS.map((key) => {
+                const active = form.selectedSymptoms.has(key);
                 return (
                   <Pressable
-                    key={s.key}
-                    onPress={() => toggleSymptom(s.key)}
+                    key={key}
+                    onPress={() => toggleSymptom(key)}
                     style={[styles.symptomChip, active && styles.symptomChipActive]}
                   >
                     <Feather
-                      name={s.icon}
+                      name={SYMPTOM_ICONS[key]}
                       size={14}
                       color={active ? palette.white : palette.primary}
                     />
@@ -355,7 +404,7 @@ export default function AssessmentsScreen() {
                         active && styles.symptomChipTextActive,
                       ]}
                     >
-                      {s.label}
+                      {symptomLabels[key]}
                     </Text>
                   </Pressable>
                 );
@@ -364,23 +413,25 @@ export default function AssessmentsScreen() {
           </GlassCard>
 
           <GlassCard>
-            <Text style={styles.cardH}>Red flags — safety check</Text>
+            <Text style={styles.cardH}><T>Red flags — safety check</T></Text>
             <Text style={styles.sub}>
-              Any "Yes" below will immediately text your clinician.
+              <T>Any "Yes" below will immediately text your clinician.</T>
             </Text>
             <View style={{ gap: 10, marginTop: 8 }}>
-              {RED_FLAG_DEFS.map((rf) => (
-                <View key={rf.key} style={styles.rfRow}>
-                  <Text style={styles.rfQ}>{rf.question}</Text>
+              {RED_FLAG_KEYS.map((k) => (
+                <View key={k} style={styles.rfRow}>
+                  <Text style={styles.rfQ}>{redFlagQuestions[k]}</Text>
                   <YesNo
-                    value={form.redFlags[rf.key]}
+                    value={form.redFlags[k]}
                     onChange={(v) => {
                       if (v === null) return;
                       setForm((prev) => ({
                         ...prev,
-                        redFlags: { ...prev.redFlags, [rf.key]: v },
+                        redFlags: { ...prev.redFlags, [k]: v },
                       }));
                     }}
+                    yesLabel={tYes}
+                    noLabel={tNo}
                   />
                 </View>
               ))}
@@ -388,37 +439,37 @@ export default function AssessmentsScreen() {
           </GlassCard>
 
           <GlassCard>
-            <Text style={styles.cardH}>Photos (optional)</Text>
+            <Text style={styles.cardH}><T>Photos (optional)</T></Text>
             <Text style={styles.sub}>
-              Photos stay on your device. They are not sent in escalation SMS (text only).
+              <T>Photos stay on your device. They are not sent in escalation SMS (text only).</T>
             </Text>
             <View style={{ gap: 10, marginTop: 10 }}>
-              {PHOTO_SLOTS.map((slot) => {
-                const existing = form.photos.find((p) => p.tag === slot.tag);
+              {photoSlotTags.map((tag) => {
+                const existing = form.photos.find((p) => p.tag === tag);
                 return (
-                  <View key={slot.tag} style={styles.photoRow}>
+                  <View key={tag} style={styles.photoRow}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.photoLabel}>{slot.label}</Text>
+                      <Text style={styles.photoLabel}>{photoSlotLabels[tag]}</Text>
                       {existing ? (
                         <Image source={{ uri: existing.uri }} style={styles.thumb} />
                       ) : null}
                     </View>
                     <View style={{ gap: 6 }}>
                       <Pressable
-                        onPress={() => addPhoto(slot.tag, 'camera')}
+                        onPress={() => addPhoto(tag, 'camera')}
                         style={styles.iconBtn}
                       >
                         <Feather name="camera" size={16} color={palette.primary} />
                       </Pressable>
                       <Pressable
-                        onPress={() => addPhoto(slot.tag, 'library')}
+                        onPress={() => addPhoto(tag, 'library')}
                         style={styles.iconBtn}
                       >
                         <Feather name="image" size={16} color={palette.primary} />
                       </Pressable>
                       {existing ? (
                         <Pressable
-                          onPress={() => removePhoto(slot.tag)}
+                          onPress={() => removePhoto(tag)}
                           style={styles.iconBtn}
                         >
                           <Feather name="trash-2" size={16} color={palette.statusAlert} />
@@ -432,13 +483,13 @@ export default function AssessmentsScreen() {
           </GlassCard>
 
           <GlassCard>
-            <Text style={styles.cardH}>Notes (optional)</Text>
+            <Text style={styles.cardH}><T>Notes (optional)</T></Text>
             <TextInput
               value={form.notes}
               onChangeText={(t) => update('notes', t)}
               style={[styles.input, { minHeight: 90, textAlignVertical: 'top' }]}
               multiline
-              placeholder="Anything else the clinician should know?"
+              placeholder={tNotesPlaceholder}
               placeholderTextColor={palette.textTertiary}
             />
           </GlassCard>
@@ -466,7 +517,7 @@ export default function AssessmentsScreen() {
               <ActivityIndicator color={palette.white} />
             ) : (
               <>
-                <Text style={styles.submitText}>Save assessment</Text>
+                <Text style={styles.submitText}><T>Save assessment</T></Text>
                 <Feather name="check-circle" size={18} color={palette.white} />
               </>
             )}
@@ -489,39 +540,60 @@ function ResultScreen({
   const insets = useContentInsets();
   const { outcome, severity, trend } = result;
 
+  const tAssessmentSaved = useT('Assessment saved');
+  const tNoRedFlags = useT('No red flags — no alert was sent.');
+  const tNoClinician = useT(
+    'Red flags detected but no clinician phone on file. Please update your contacts.',
+  );
+  const tCooldown = useT(
+    'Red flags present, but your clinician was recently alerted about the same issues (6h cooldown).',
+  );
+  const tClinicianAlerted = useT('Clinician alerted by SMS');
+  const tSmsSentPrefix = useT('An SMS was sent to your clinician');
+  const tSmsFailedTitle = useT('SMS alert FAILED');
+  const tSmsFailedPrefix = useT('Could not text your clinician');
+  const tSmsCallDirectly = useT('Please call them directly.');
+  const tSmsDisabledTitle = useT('SMS alert disabled');
+  const tSmsDisabled = useT(
+    'Red flags detected, but SMS is not configured. Please call your clinician directly.',
+  );
+  const tSeverityScore = useT('Severity score:');
+  const tImproving = useT('improving');
+  const tWorsening = useT('worsening');
+  const tUnchanged = useT('unchanged');
+  const tBackToDashboard = useT('Back to dashboard');
+  const tLogAnother = useT('Log another');
+
   let tone: 'success' | 'warning' | 'danger' = 'success';
-  let title = 'Assessment saved';
+  let title = tAssessmentSaved;
   let message = '';
   switch (outcome.kind) {
     case 'no_red_flags':
       tone = 'success';
-      message = 'No red flags — no alert was sent.';
+      message = tNoRedFlags;
       break;
     case 'no_clinician':
       tone = 'warning';
-      message =
-        'Red flags detected but no clinician phone on file. Please update your contacts.';
+      message = tNoClinician;
       break;
     case 'cooldown':
       tone = 'warning';
-      message =
-        'Red flags present, but your clinician was recently alerted about the same issues (6h cooldown).';
+      message = tCooldown;
       break;
     case 'sent':
       tone = 'danger';
-      title = 'Clinician alerted by SMS';
-      message = `An SMS was sent to your clinician (Twilio id ${outcome.twilioSid.slice(0, 10)}…).`;
+      title = tClinicianAlerted;
+      message = `${tSmsSentPrefix} (Twilio id ${outcome.twilioSid.slice(0, 10)}…).`;
       break;
     case 'failed':
       tone = 'danger';
-      title = 'SMS alert FAILED';
-      message = `Could not text your clinician: ${outcome.error}. Please call them directly.`;
+      title = tSmsFailedTitle;
+      message = `${tSmsFailedPrefix}: ${outcome.error}. ${tSmsCallDirectly}`;
       break;
     case 'disabled':
       tone = 'danger';
-      title = 'SMS alert disabled';
-      message =
-        'Red flags detected, but SMS is not configured. Please call your clinician directly.';
+      title = tSmsDisabledTitle;
+      message = tSmsDisabled;
       break;
   }
 
@@ -555,7 +627,7 @@ function ResultScreen({
           />
           <Text style={styles.resTitle}>{title}</Text>
           <Text style={styles.resSeverity}>
-            Severity score: <Text style={{ fontFamily: fonts.bold }}>{severity.toFixed(1)}</Text>
+            {tSeverityScore} <Text style={{ fontFamily: fonts.bold }}>{severity.toFixed(1)}</Text>
             {trend ? (
               <Text
                 style={{
@@ -569,7 +641,7 @@ function ResultScreen({
                 }}
               >
                 {' '}
-                · {trend === 'better' ? 'improving' : trend === 'worse' ? 'worsening' : 'unchanged'}
+                · {trend === 'better' ? tImproving : trend === 'worse' ? tWorsening : tUnchanged}
               </Text>
             ) : null}
           </Text>
@@ -579,14 +651,14 @@ function ResultScreen({
 
         <View style={{ gap: 10 }}>
           <Pressable onPress={onDone} style={styles.submitBtn}>
-            <Text style={styles.submitText}>Back to dashboard</Text>
+            <Text style={styles.submitText}>{tBackToDashboard}</Text>
           </Pressable>
           <Pressable
             onPress={onAnother}
             style={[styles.submitBtn, { backgroundColor: 'transparent' }]}
           >
             <Text style={[styles.submitText, { color: palette.primary }]}>
-              Log another
+              {tLogAnother}
             </Text>
           </Pressable>
         </View>
@@ -613,9 +685,13 @@ function Question({
 function YesNo({
   value,
   onChange,
+  yesLabel,
+  noLabel,
 }: {
   value: boolean | null;
   onChange: (v: boolean | null) => void;
+  yesLabel: string;
+  noLabel: string;
 }) {
   return (
     <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -623,13 +699,13 @@ function YesNo({
         onPress={() => onChange(true)}
         style={[styles.yn, value === true && styles.ynYes]}
       >
-        <Text style={[styles.ynText, value === true && styles.ynTextActive]}>Yes</Text>
+        <Text style={[styles.ynText, value === true && styles.ynTextActive]}>{yesLabel}</Text>
       </Pressable>
       <Pressable
         onPress={() => onChange(false)}
         style={[styles.yn, value === false && styles.ynNo]}
       >
-        <Text style={[styles.ynText, value === false && styles.ynTextActive]}>No</Text>
+        <Text style={[styles.ynText, value === false && styles.ynTextActive]}>{noLabel}</Text>
       </Pressable>
     </View>
   );

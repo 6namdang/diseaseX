@@ -14,19 +14,37 @@ import {
 import { listEscalations } from '../../db/escalationRepo';
 import type { Assessment, AssessmentPhoto, Escalation, RedFlagKey } from '../../db/types';
 import { useContentInsets } from '../../hooks/useContentInsets';
-
-const RED_FLAG_LABEL: Record<RedFlagKey, string> = {
-  confused: 'confusion',
-  seizures: 'seizures',
-  unable_to_walk: 'unable to walk',
-  dark_urine: 'dark urine',
-  yellow_eyes: 'yellow eyes',
-  persistent_vomiting: 'vomiting+dehydration',
-};
+import { T } from '../../i18n/T';
+import { useT } from '../../i18n/LanguageContext';
 
 export default function HistoryScreen() {
   const insets = useContentInsets();
   const db = useSQLiteContext();
+
+  const redFlagLabels: Record<RedFlagKey, string> = {
+    confused: useT('confusion'),
+    seizures: useT('seizures'),
+    unable_to_walk: useT('unable to walk'),
+    dark_urine: useT('dark urine'),
+    yellow_eyes: useT('yellow eyes'),
+    persistent_vomiting: useT('vomiting+dehydration'),
+  };
+  const tRedFlagSingular = useT('red flag');
+  const tRedFlagPlural = useT('red flags');
+  const tSeverity = useT('Severity:');
+  const tFever = useT('Fever');
+  const tVomiting = useT('Vomiting');
+  const tKeepsFluids = useT('Keeps fluids');
+  const tOnset = useT('Onset');
+  const tYes = useT('yes');
+  const tNo = useT('no');
+  const tDaysAgoSuffix = useT('d ago');
+  const tNoAssessments = useT('No assessments yet.');
+  const tSmsSentTo = useT('SMS sent to');
+  const tSmsFailed = useT('SMS failed:');
+  const tSmsSkipped = useT('SMS skipped: Twilio not configured');
+  const tCooldown = useT('Cooldown — clinician already alerted recently');
+  const tUnknown = useT('unknown');
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [photosById, setPhotosById] = useState<Record<number, AssessmentPhoto[]>>({});
   const [escalations, setEscalations] = useState<Escalation[]>([]);
@@ -83,16 +101,16 @@ export default function HistoryScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />
         }
       >
-        <Text style={styles.h1}>History</Text>
+        <Text style={styles.h1}><T>History</T></Text>
         <Text style={styles.sub}>
-          Every assessment you have logged, most recent first.
+          <T>Every assessment you have logged, most recent first.</T>
         </Text>
 
         {assessments.length === 0 ? (
           <GlassCard>
             <View style={{ alignItems: 'center', gap: 8, paddingVertical: 20 }}>
               <Feather name="inbox" size={28} color={palette.textTertiary} />
-              <Text style={styles.empty}>No assessments yet.</Text>
+              <Text style={styles.empty}>{tNoAssessments}</Text>
             </View>
           </GlassCard>
         ) : (
@@ -106,7 +124,7 @@ export default function HistoryScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.when}>{formatDateTime(a.createdAt)}</Text>
                     <Text style={styles.sev}>
-                      Severity:{' '}
+                      {tSeverity}{' '}
                       <Text
                         style={{
                           fontFamily: fonts.bold,
@@ -125,22 +143,22 @@ export default function HistoryScreen() {
                   {flags.length > 0 ? (
                     <View style={styles.flagPill}>
                       <Feather name="alert-triangle" size={14} color={palette.white} />
-                      <Text style={styles.flagPillText}>{flags.length} red flag{flags.length > 1 ? 's' : ''}</Text>
+                      <Text style={styles.flagPillText}>{flags.length} {flags.length > 1 ? tRedFlagPlural : tRedFlagSingular}</Text>
                     </View>
                   ) : null}
                 </View>
 
                 <View style={styles.stats}>
-                  <Stat label="Fever" value={boolLabel(a.fever)} extra={a.feverTempC ? `${a.feverTempC}°C` : undefined} />
-                  <Stat label="Vomiting" value={boolLabel(a.vomiting)} />
+                  <Stat label={tFever} value={boolLabelWith(a.fever, tYes, tNo)} extra={a.feverTempC ? `${a.feverTempC}°C` : undefined} />
+                  <Stat label={tVomiting} value={boolLabelWith(a.vomiting, tYes, tNo)} />
                   <Stat
-                    label="Keeps fluids"
-                    value={a.canKeepFluidsDown === null ? '—' : a.canKeepFluidsDown ? 'yes' : 'no'}
+                    label={tKeepsFluids}
+                    value={a.canKeepFluidsDown === null ? '—' : a.canKeepFluidsDown ? tYes : tNo}
                   />
                   <Stat
-                    label="Onset"
+                    label={tOnset}
                     value={
-                      a.symptomOnsetDaysAgo != null ? `${a.symptomOnsetDaysAgo}d ago` : '—'
+                      a.symptomOnsetDaysAgo != null ? `${a.symptomOnsetDaysAgo}${tDaysAgoSuffix}` : '—'
                     }
                   />
                 </View>
@@ -160,7 +178,7 @@ export default function HistoryScreen() {
                     {flags.map((f) => (
                       <View key={f} style={[styles.tagChip, styles.alertChip]}>
                         <Text style={[styles.tagChipText, { color: palette.white }]}>
-                          {RED_FLAG_LABEL[f]}
+                          {redFlagLabels[f]}
                         </Text>
                       </View>
                     ))}
@@ -211,12 +229,12 @@ export default function HistoryScreen() {
                         />
                         <Text style={styles.escText}>
                           {e.status === 'sent'
-                            ? `SMS sent to ${e.clinicianPhone}`
+                            ? `${tSmsSentTo} ${e.clinicianPhone}`
                             : e.status === 'failed'
-                              ? `SMS failed: ${e.errorMessage ?? 'unknown'}`
+                              ? `${tSmsFailed} ${e.errorMessage ?? tUnknown}`
                               : e.status === 'disabled'
-                                ? 'SMS skipped: Twilio not configured'
-                                : 'Cooldown — clinician already alerted recently'}
+                                ? tSmsSkipped
+                                : tCooldown}
                         </Text>
                       </View>
                     ))}
@@ -243,9 +261,9 @@ function Stat({ label, value, extra }: { label: string; value: string; extra?: s
   );
 }
 
-function boolLabel(v: boolean | null): string {
+function boolLabelWith(v: boolean | null, yes: string, no: string): string {
   if (v === null) return '—';
-  return v ? 'yes' : 'no';
+  return v ? yes : no;
 }
 
 function formatDateTime(ts: number): string {

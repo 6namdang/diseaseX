@@ -24,7 +24,8 @@ import { fonts, palette, radii, shadow, space } from '../constants/designTokens'
 import { getPatient, markOnboarded, upsertPatient } from '../db/patientRepo';
 import type { ReadingLevel, Sex } from '../db/types';
 import { useContentInsets } from '../hooks/useContentInsets';
-import { useLanguage } from '../i18n/LanguageContext';
+import { T } from '../i18n/T';
+import { useLanguage, useT } from '../i18n/LanguageContext';
 import { LANGUAGES } from '../i18n/languages';
 import { captureLocation, type GeoResult } from '../services/geoService';
 
@@ -83,6 +84,31 @@ export default function WelcomeScreen() {
   const [locLoading, setLocLoading] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const tLocPermDenied = useT(
+    'Location permission is required to determine if you are in a malaria-endemic country. Please enable it in Settings and try again.',
+  );
+  const tLocPosUnavailPrefix = useT('Could not get your position');
+  const tLocGpsHint = useT('Make sure GPS is on and try again.');
+  const tLocLookupFail = useT('Could not look up country');
+  const tSaveFail = useT('Could not save');
+  const tUnknownErr = useT('Unknown error');
+  const tBack = useT('Back');
+  const tContinue = useT('Continue');
+  const tCompleteSetup = useT('Complete setup');
+  const tStepWord = useT('Step');
+  const tOfWord = useT('of');
+  const tWelcomeTitle = useT('Welcome to DiseaseX');
+  const tWelcomeTagline = useT(
+    "We'll ask a few questions so the app can give you advice tailored to your situation.",
+  );
+  const stepTitles = [
+    useT('About you'),
+    useT('Medical history'),
+    useT('Location check'),
+    useT('Language & contact'),
+    useT('Your clinician'),
+  ];
 
   // Pre-fill from existing DB row so Settings → Edit profile acts as an edit,
   // not an overwrite. Only runs once on mount; new installs just see emptyForm.
@@ -164,15 +190,11 @@ export default function WelcomeScreen() {
     setLocLoading(false);
     if (!res.ok) {
       if (res.error.kind === 'permission_denied') {
-        setLocError(
-          'Location permission is required to determine if you are in a malaria-endemic country. Please enable it in Settings and try again.',
-        );
+        setLocError(tLocPermDenied);
       } else if (res.error.kind === 'position_unavailable') {
-        setLocError(
-          `Could not get your position: ${res.error.error}. Make sure GPS is on and try again.`,
-        );
+        setLocError(`${tLocPosUnavailPrefix}: ${res.error.error}. ${tLocGpsHint}`);
       } else {
-        setLocError(`Could not look up country: ${res.error.error}.`);
+        setLocError(`${tLocLookupFail}: ${res.error.error}.`);
       }
       return;
     }
@@ -219,7 +241,7 @@ export default function WelcomeScreen() {
       router.replace('/(tabs)');
     } catch (e: any) {
       setSaving(false);
-      Alert.alert('Could not save', e?.message ?? 'Unknown error');
+      Alert.alert(tSaveFail, e?.message ?? tUnknownErr);
     }
   }
 
@@ -241,7 +263,14 @@ export default function WelcomeScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Header step={step} />
+          <Header
+            step={step}
+            stepTitles={stepTitles}
+            titleText={tWelcomeTitle}
+            taglineText={tWelcomeTagline}
+            stepWord={tStepWord}
+            ofWord={tOfWord}
+          />
 
           {step === 0 && <StepIdentity form={form} update={update} />}
           {step === 1 && <StepMedical form={form} update={update} />}
@@ -272,7 +301,7 @@ export default function WelcomeScreen() {
           {step > 0 ? (
             <Pressable onPress={onBack} style={styles.backBtn} disabled={saving}>
               <Feather name="arrow-left" size={18} color={palette.secondary} />
-              <Text style={styles.backText}>Back</Text>
+              <Text style={styles.backText}>{tBack}</Text>
             </Pressable>
           ) : (
             <View style={{ flex: 1 }} />
@@ -291,7 +320,7 @@ export default function WelcomeScreen() {
             ) : (
               <>
                 <Text style={styles.ctaText}>
-                  {step === STEP_COUNT - 1 ? 'Complete setup' : 'Continue'}
+                  {step === STEP_COUNT - 1 ? tCompleteSetup : tContinue}
                 </Text>
                 <Feather name="arrow-right" size={18} color={palette.white} />
               </>
@@ -333,7 +362,21 @@ function stepIsValid(step: number, f: Form): boolean {
   }
 }
 
-function Header({ step }: { step: number }) {
+function Header({
+  step,
+  stepTitles,
+  titleText,
+  taglineText,
+  stepWord,
+  ofWord,
+}: {
+  step: number;
+  stepTitles: string[];
+  titleText: string;
+  taglineText: string;
+  stepWord: string;
+  ofWord: string;
+}) {
   return (
     <View style={styles.header}>
       <LinearGradient
@@ -344,10 +387,8 @@ function Header({ step }: { step: number }) {
       >
         <Feather name="heart" size={28} color={palette.white} />
       </LinearGradient>
-      <Text style={styles.appName}>Welcome to DiseaseX</Text>
-      <Text style={styles.tagline}>
-        We'll ask a few questions so the app can give you advice tailored to your situation.
-      </Text>
+      <Text style={styles.appName}>{titleText}</Text>
+      <Text style={styles.tagline}>{taglineText}</Text>
       <View style={styles.progressRow}>
         {Array.from({ length: STEP_COUNT }).map((_, i) => (
           <View
@@ -360,19 +401,11 @@ function Header({ step }: { step: number }) {
         ))}
       </View>
       <Text style={styles.stepLabel}>
-        Step {step + 1} of {STEP_COUNT}: {STEP_TITLES[step]}
+        {stepWord} {step + 1} {ofWord} {STEP_COUNT}: {stepTitles[step]}
       </Text>
     </View>
   );
 }
-
-const STEP_TITLES = [
-  'About you',
-  'Medical history',
-  'Location check',
-  'Language & contact',
-  'Your clinician',
-];
 
 // ── Step 0 ──────────────────────────────────────────────────────────────
 function StepIdentity({
@@ -382,57 +415,70 @@ function StepIdentity({
   form: Form;
   update: <K extends keyof Form>(k: K, v: Form[K]) => void;
 }) {
+  const tFullName = useT('Full name');
+  const tAgeYears = useT('Age (years)');
+  const tSexAtBirth = useT('Sex at birth');
+  const tWeight = useT('Weight (kg) — needed for dosing');
+  const tHeight = useT('Height (cm) — optional');
+  const tMale = useT('male');
+  const tFemale = useT('female');
+  const tOther = useT('other');
+  const phName = useT('e.g. Amina Mwangi');
+  const phAge = useT('e.g. 34');
+  const phWeight = useT('e.g. 62.5');
+  const phHeight = useT('e.g. 170');
+  const sexLabels: Record<Sex, string> = { male: tMale, female: tFemale, other: tOther };
   return (
     <GlassCard>
       <View style={styles.fieldStack}>
-        <Field label="Full name">
+        <Field label={tFullName}>
           <TextInput
             value={form.name}
             onChangeText={(t) => update('name', t)}
             style={styles.input}
-            placeholder="e.g. Amina Mwangi"
+            placeholder={phName}
             placeholderTextColor={palette.textTertiary}
           />
         </Field>
-        <Field label="Age (years)">
+        <Field label={tAgeYears}>
           <TextInput
             value={form.age}
             onChangeText={(t) => update('age', t.replace(/[^0-9]/g, ''))}
             style={styles.input}
             keyboardType="number-pad"
-            placeholder="e.g. 34"
+            placeholder={phAge}
             placeholderTextColor={palette.textTertiary}
           />
         </Field>
-        <Field label="Sex at birth">
+        <Field label={tSexAtBirth}>
           <Row>
             {(['male', 'female', 'other'] as const).map((s) => (
               <Choice
                 key={s}
-                label={s}
+                label={sexLabels[s]}
                 selected={form.sex === s}
                 onPress={() => update('sex', s)}
               />
             ))}
           </Row>
         </Field>
-        <Field label="Weight (kg) — needed for dosing">
+        <Field label={tWeight}>
           <TextInput
             value={form.weightKg}
             onChangeText={(t) => update('weightKg', sanitizeDecimal(t))}
             style={styles.input}
             keyboardType="decimal-pad"
-            placeholder="e.g. 62.5"
+            placeholder={phWeight}
             placeholderTextColor={palette.textTertiary}
           />
         </Field>
-        <Field label="Height (cm) — optional">
+        <Field label={tHeight}>
           <TextInput
             value={form.heightCm}
             onChangeText={(t) => update('heightCm', sanitizeDecimal(t))}
             style={styles.input}
             keyboardType="decimal-pad"
-            placeholder="e.g. 170"
+            placeholder={phHeight}
             placeholderTextColor={palette.textTertiary}
           />
         </Field>
@@ -449,33 +495,47 @@ function StepMedical({
   form: Form;
   update: <K extends keyof Form>(k: K, v: Form[K]) => void;
 }) {
+  const tPregnantNow = useT('Are you pregnant right now?');
+  const tWhichTrimester = useT('Which trimester?');
+  const tBreastfeeding = useT('Are you breastfeeding?');
+  const tAllergies = useT('Drug allergies (comma-separated)');
+  const tMedsNow = useT('Medicines you are taking now');
+  const tChronic = useT('Long-term conditions');
+  const tPrior = useT('How many times have you had malaria before?');
+  const tTrimester = useT('Trimester');
+  const tYes = useT('Yes');
+  const tNo = useT('No');
+  const phAllergies = useT('e.g. penicillin, sulfa');
+  const phMeds = useT('e.g. metformin, paracetamol');
+  const phChronic = useT('e.g. diabetes, G6PD deficiency');
+  const phPrior = useT('e.g. 2 (leave blank if unsure)');
   const askPregnancy = form.sex === 'female';
   return (
     <View style={{ gap: 12 }}>
       {askPregnancy && (
         <GlassCard>
           <View style={styles.fieldStack}>
-            <Field label="Are you pregnant right now?">
+            <Field label={tPregnantNow}>
               <Row>
                 <Choice
-                  label="Yes"
+                  label={tYes}
                   selected={form.isPregnant === true}
                   onPress={() => update('isPregnant', true)}
                 />
                 <Choice
-                  label="No"
+                  label={tNo}
                   selected={form.isPregnant === false}
                   onPress={() => update('isPregnant', false)}
                 />
               </Row>
             </Field>
             {form.isPregnant && (
-              <Field label="Which trimester?">
+              <Field label={tWhichTrimester}>
                 <Row>
                   {([1, 2, 3] as const).map((t) => (
                     <Choice
                       key={t}
-                      label={`Trimester ${t}`}
+                      label={`${tTrimester} ${t}`}
                       selected={form.pregnancyTrimester === t}
                       onPress={() => update('pregnancyTrimester', t)}
                     />
@@ -484,15 +544,15 @@ function StepMedical({
               </Field>
             )}
             {form.isPregnant === false && (
-              <Field label="Are you breastfeeding?">
+              <Field label={tBreastfeeding}>
                 <Row>
                   <Choice
-                    label="Yes"
+                    label={tYes}
                     selected={form.isBreastfeeding === true}
                     onPress={() => update('isBreastfeeding', true)}
                   />
                   <Choice
-                    label="No"
+                    label={tNo}
                     selected={form.isBreastfeeding === false}
                     onPress={() => update('isBreastfeeding', false)}
                   />
@@ -505,37 +565,37 @@ function StepMedical({
 
       <GlassCard>
         <View style={styles.fieldStack}>
-          <Field label="Drug allergies (comma-separated)">
+          <Field label={tAllergies}>
             <TextInput
               value={form.allergies}
               onChangeText={(t) => update('allergies', t)}
               style={[styles.input, styles.multiline]}
-              placeholder="e.g. penicillin, sulfa"
+              placeholder={phAllergies}
               placeholderTextColor={palette.textTertiary}
               multiline
             />
           </Field>
-          <Field label="Medicines you are taking now">
+          <Field label={tMedsNow}>
             <TextInput
               value={form.currentMedications}
               onChangeText={(t) => update('currentMedications', t)}
               style={[styles.input, styles.multiline]}
-              placeholder="e.g. metformin, paracetamol"
+              placeholder={phMeds}
               placeholderTextColor={palette.textTertiary}
               multiline
             />
           </Field>
-          <Field label="Long-term conditions">
+          <Field label={tChronic}>
             <TextInput
               value={form.chronicConditions}
               onChangeText={(t) => update('chronicConditions', t)}
               style={[styles.input, styles.multiline]}
-              placeholder="e.g. diabetes, G6PD deficiency"
+              placeholder={phChronic}
               placeholderTextColor={palette.textTertiary}
               multiline
             />
           </Field>
-          <Field label="How many times have you had malaria before?">
+          <Field label={tPrior}>
             <TextInput
               value={form.priorMalariaEpisodes}
               onChangeText={(t) =>
@@ -543,7 +603,7 @@ function StepMedical({
               }
               style={styles.input}
               keyboardType="number-pad"
-              placeholder="e.g. 2 (leave blank if unsure)"
+              placeholder={phPrior}
               placeholderTextColor={palette.textTertiary}
             />
           </Field>
@@ -567,17 +627,28 @@ function StepLocation({
   loading: boolean;
   error: string | null;
 }) {
+  const tAskWhy = useT('Why we ask for location');
+  const tAskWhyMsg = useT(
+    'DiseaseX checks whether you are in a country with ongoing malaria transmission (per WHO Global Health Observatory). Used once. Never tracked in the background.',
+  );
+  const tLocErrTitle = useT('Location error');
+  const tUnknownCountry = useT('Unknown country');
+  const tEndemicTxt = useT('This country has ongoing malaria transmission per WHO.');
+  const tEliminatedTxt = useT('This country is considered malaria-free / eliminated per WHO.');
+  const tNonEndemicTxt = useT('This country is not tracked as malaria-endemic by WHO.');
+  const tUnknownEndemic = useT('WHO endemicity status unknown — proceed with caution.');
+  const tRecapture = useT('Recapture');
+  const tNeedLoc = useT('We need your location');
+  const tNeedLocHint = useT('Tap below to share location. This is required to continue.');
+  const tShareLoc = useT('Share my location');
+  const tOpenSettings = useT('Open Settings');
   const loc = form.location;
   return (
     <View style={{ gap: 12 }}>
-      <Banner
-        tone="info"
-        title="Why we ask for location"
-        message="DiseaseX checks whether you are in a country with ongoing malaria transmission (per WHO Global Health Observatory). Used once. Never tracked in the background."
-      />
+      <Banner tone="info" title={tAskWhy} message={tAskWhyMsg} />
 
       {error ? (
-        <Banner tone="danger" title="Location error" message={error} />
+        <Banner tone="danger" title={tLocErrTitle} message={error} />
       ) : null}
 
       <GlassCard>
@@ -594,30 +665,28 @@ function StepLocation({
                 }
               />
               <Text style={styles.locTitle}>
-                {loc.countryName ?? 'Unknown country'}
+                {loc.countryName ?? tUnknownCountry}
                 {loc.region ? `, ${loc.region}` : ''}
               </Text>
               <Text style={styles.locSubtitle}>
                 {loc.endemicity === 'endemic'
-                  ? 'This country has ongoing malaria transmission per WHO.'
+                  ? tEndemicTxt
                   : loc.endemicity === 'eliminated'
-                    ? 'This country is considered malaria-free / eliminated per WHO.'
+                    ? tEliminatedTxt
                     : loc.endemicity === 'non_endemic'
-                      ? 'This country is not tracked as malaria-endemic by WHO.'
-                      : 'WHO endemicity status unknown — proceed with caution.'}
+                      ? tNonEndemicTxt
+                      : tUnknownEndemic}
               </Text>
               <Pressable onPress={onLocate} style={styles.secondaryBtn} disabled={loading}>
                 <Feather name="refresh-cw" size={16} color={palette.primary} />
-                <Text style={styles.secondaryBtnText}>Recapture</Text>
+                <Text style={styles.secondaryBtnText}>{tRecapture}</Text>
               </Pressable>
             </>
           ) : (
             <>
               <Feather name="map-pin" size={36} color={palette.primary} />
-              <Text style={styles.locTitle}>We need your location</Text>
-              <Text style={styles.locSubtitle}>
-                Tap below to share location. This is required to continue.
-              </Text>
+              <Text style={styles.locTitle}>{tNeedLoc}</Text>
+              <Text style={styles.locSubtitle}>{tNeedLocHint}</Text>
               <Pressable
                 onPress={onLocate}
                 style={styles.primaryInlineBtn}
@@ -628,14 +697,14 @@ function StepLocation({
                 ) : (
                   <>
                     <Feather name="navigation" size={16} color={palette.white} />
-                    <Text style={styles.primaryInlineText}>Share my location</Text>
+                    <Text style={styles.primaryInlineText}>{tShareLoc}</Text>
                   </>
                 )}
               </Pressable>
               {error?.toLowerCase().includes('settings') && (
                 <Pressable onPress={onSettings} style={styles.secondaryBtn}>
                   <Feather name="settings" size={16} color={palette.primary} />
-                  <Text style={styles.secondaryBtnText}>Open Settings</Text>
+                  <Text style={styles.secondaryBtnText}>{tOpenSettings}</Text>
                 </Pressable>
               )}
             </>
@@ -656,10 +725,21 @@ function StepPrefs({
   update: <K extends keyof Form>(k: K, v: Form[K]) => void;
   onPickLanguage: (code: string) => void;
 }) {
+  const tLangLabel = useT('Preferred language (UI + advice)');
+  const tReadingLevel = useT('Reading level');
+  const tPhoneLabel = useT('Your phone (optional — included in escalations)');
+  const tBasic = useT('basic');
+  const tInter = useT('intermediate');
+  const tAdv = useT('advanced');
+  const readingLabels: Record<ReadingLevel, string> = {
+    basic: tBasic,
+    intermediate: tInter,
+    advanced: tAdv,
+  };
   return (
     <GlassCard>
       <View style={styles.fieldStack}>
-        <Field label="Preferred language (UI + advice)">
+        <Field label={tLangLabel}>
           <View style={styles.row}>
             {LANGUAGES.map((l) => (
               <Choice
@@ -671,19 +751,19 @@ function StepPrefs({
             ))}
           </View>
         </Field>
-        <Field label="Reading level">
+        <Field label={tReadingLevel}>
           <Row>
             {(['basic', 'intermediate', 'advanced'] as const).map((r) => (
               <Choice
                 key={r}
-                label={r}
+                label={readingLabels[r]}
                 selected={form.readingLevel === r}
                 onPress={() => update('readingLevel', r)}
               />
             ))}
           </Row>
         </Field>
-        <Field label="Your phone (optional — included in escalations)">
+        <Field label={tPhoneLabel}>
           <TextInput
             value={form.patientPhone}
             onChangeText={(t) => update('patientPhone', t)}
@@ -706,25 +786,29 @@ function StepClinician({
   form: Form;
   update: <K extends keyof Form>(k: K, v: Form[K]) => void;
 }) {
+  const tEmergencyTitle = useT('Emergency contact');
+  const tEmergencyMsg = useT(
+    'If you report severe symptoms, DiseaseX will automatically text your clinician with the key details. Please use a number that receives SMS.',
+  );
+  const tClinName = useT('Clinician / PCP name');
+  const tClinPhone = useT('Clinician phone (with country code)');
+  const tClinEmail = useT('Clinician email (optional)');
+  const phClinName = useT('e.g. Dr. Otieno');
   return (
     <View style={{ gap: 12 }}>
-      <Banner
-        tone="warning"
-        title="Emergency contact"
-        message="If you report severe symptoms, DiseaseX will automatically text your clinician with the key details. Please use a number that receives SMS."
-      />
+      <Banner tone="warning" title={tEmergencyTitle} message={tEmergencyMsg} />
       <GlassCard>
         <View style={styles.fieldStack}>
-          <Field label="Clinician / PCP name">
+          <Field label={tClinName}>
             <TextInput
               value={form.clinicianName}
               onChangeText={(t) => update('clinicianName', t)}
               style={styles.input}
-              placeholder="e.g. Dr. Otieno"
+              placeholder={phClinName}
               placeholderTextColor={palette.textTertiary}
             />
           </Field>
-          <Field label="Clinician phone (with country code)">
+          <Field label={tClinPhone}>
             <TextInput
               value={form.clinicianPhone}
               onChangeText={(t) => update('clinicianPhone', t)}
@@ -734,7 +818,7 @@ function StepClinician({
               placeholderTextColor={palette.textTertiary}
             />
           </Field>
-          <Field label="Clinician email (optional)">
+          <Field label={tClinEmail}>
             <TextInput
               value={form.clinicianEmail}
               onChangeText={(t) => update('clinicianEmail', t)}

@@ -22,19 +22,23 @@ import { clearChatHistory, insertChatMessage, listChatMessages } from '../../db/
 import type { ChatMessage } from '../../db/types';
 import { useContentInsets } from '../../hooks/useContentInsets';
 import { usePatient } from '../../hooks/usePatient';
+import { useT } from '../../i18n/LanguageContext';
 import RAGService from '../../services/ragService';
 
 type UiMessage = ChatMessage | { id: string; role: 'assistant'; content: string; thinking: string; pending: true; createdAt: number };
 
 function ThinkingBubble({ text, streaming }: { text: string; streaming: boolean }) {
   const [open, setOpen] = useState(false);
+  const tThinking = useT('Thinking…');
+  const tThoughtPrefix = useT('Thought process');
+  const tChars = useT('chars');
   if (!text && !streaming) return null;
   return (
     <Pressable onPress={() => setOpen((o) => !o)} style={thinkStyles.wrap}>
       <View style={thinkStyles.header}>
         <Feather name="cpu" size={12} color={palette.textTertiary} />
         <Text style={thinkStyles.label}>
-          {streaming ? 'Thinking…' : `Thought process (${text.length} chars)`}
+          {streaming ? tThinking : `${tThoughtPrefix} (${text.length} ${tChars})`}
         </Text>
         <Feather
           name={open ? 'chevron-up' : 'chevron-down'}
@@ -94,6 +98,19 @@ export default function ChatScreen() {
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
 
+  const tTitle = useT('Malaria Care AI');
+  const tClear = useT('Clear');
+  const tHint = useT('Fully offline. Advice is tailored to the profile you saved during onboarding.');
+  const tProfileIncompleteTitle = useT('Profile incomplete');
+  const tProfileIncompleteMsg = useT(
+    "The AI can give general info but won't tailor dosing until you finish onboarding.",
+  );
+  const tErrorPrefix = useT('Error:');
+  const tLoadingAI = useT('Loading AI into memory…');
+  const tStartingUp = useT('Starting up…');
+  const tFailedInit = useT('Failed to initialize AI');
+  const tAskPlaceholder = useT('Ask about your symptoms, medicine, dose…');
+
   const listRef = useRef<FlatList<UiMessage>>(null);
 
   const loadHistory = useCallback(async () => {
@@ -135,7 +152,7 @@ export default function ChatScreen() {
         if (cancelled) return;
         setDownloading(false);
         setLoading(false);
-        setError(e?.message ?? 'Failed to initialize AI');
+        setError(e?.message ?? tFailedInit);
       }
     })();
     return () => {
@@ -211,10 +228,10 @@ export default function ChatScreen() {
     : messages;
 
   const statusText = (() => {
-    if (error) return `Error: ${error}`;
+    if (error) return `${tErrorPrefix} ${error}`;
     if (downloading) return `${downloadLabel}… ${Math.round(progress * 100)}%`;
-    if (loading) return 'Loading AI into memory…';
-    if (!ready) return 'Starting up…';
+    if (loading) return tLoadingAI;
+    if (!ready) return tStartingUp;
     return null;
   })();
 
@@ -226,25 +243,23 @@ export default function ChatScreen() {
       >
         <View style={styles.header}>
           <View style={styles.headerRow}>
-            <Text style={styles.title}>Malaria Care AI</Text>
+            <Text style={styles.title}>{tTitle}</Text>
             {messages.length > 0 ? (
               <Pressable onPress={onClearHistory} style={styles.clearBtn}>
                 <Feather name="trash-2" size={16} color={palette.textSecondary} />
-                <Text style={styles.clearText}>Clear</Text>
+                <Text style={styles.clearText}>{tClear}</Text>
               </Pressable>
             ) : null}
           </View>
-          <Text style={styles.hint}>
-            Fully offline. Advice is tailored to the profile you saved during onboarding.
-          </Text>
+          <Text style={styles.hint}>{tHint}</Text>
         </View>
 
         {!patient?.onboardingCompletedAt && (
           <View style={{ paddingHorizontal: space.padH, marginBottom: 10 }}>
             <Banner
               tone="warning"
-              title="Profile incomplete"
-              message="The AI can give general info but won't tailor dosing until you finish onboarding."
+              title={tProfileIncompleteTitle}
+              message={tProfileIncompleteMsg}
             />
           </View>
         )}
@@ -323,9 +338,7 @@ export default function ChatScreen() {
         <View style={[styles.composer, { paddingBottom: insets.bottom + 12 }]}>
           <TextInput
             style={styles.input}
-            placeholder={
-              ready ? 'Ask about your symptoms, medicine, dose…' : 'Starting up…'
-            }
+            placeholder={ready ? tAskPlaceholder : tStartingUp}
             placeholderTextColor={palette.textTertiary}
             value={draft}
             onChangeText={setDraft}
@@ -354,17 +367,17 @@ export default function ChatScreen() {
 }
 
 function EmptyState({ patientName }: { patientName: string | null }) {
+  const tHi = useT('Hi');
+  const tBody = useT(
+    'Ask about your symptoms, your medicine dose, or what to do next. I know your profile — weight, age, pregnancy status, allergies — and will tailor advice to you.',
+  );
   return (
     <View style={emptyStyles.wrap}>
       <Feather name="message-circle" size={36} color={palette.primary} />
       <Text style={emptyStyles.title}>
-        {patientName ? `Hi ${patientName},` : 'Hi,'}
+        {patientName ? `${tHi} ${patientName},` : `${tHi},`}
       </Text>
-      <Text style={emptyStyles.body}>
-        Ask about your symptoms, your medicine dose, or what to do next. I know your
-        profile — weight, age, pregnancy status, allergies — and will tailor advice to
-        you.
-      </Text>
+      <Text style={emptyStyles.body}>{tBody}</Text>
     </View>
   );
 }

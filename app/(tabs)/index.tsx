@@ -15,22 +15,53 @@ import type { RedFlagKey } from '../../db/types';
 import { useAssessmentStats } from '../../hooks/useAssessmentStats';
 import { useContentInsets } from '../../hooks/useContentInsets';
 import { usePatient } from '../../hooks/usePatient';
+import { T } from '../../i18n/T';
+import { useT } from '../../i18n/LanguageContext';
 import { isConfigured as twilioConfigured } from '../../services/twilioClient';
-
-const RED_FLAG_LABEL: Record<RedFlagKey, string> = {
-  confused: 'Confusion',
-  seizures: 'Seizures',
-  unable_to_walk: 'Unable to walk',
-  dark_urine: 'Dark urine',
-  yellow_eyes: 'Yellow eyes',
-  persistent_vomiting: 'Persistent vomiting',
-};
 
 export default function HomeScreen() {
   const insets = useContentInsets();
   const router = useRouter();
   const { patient, refresh: refreshPatient } = usePatient();
   const stats = useAssessmentStats();
+
+  const redFlagLabels: Record<RedFlagKey, string> = {
+    confused: useT('Confusion'),
+    seizures: useT('Seizures'),
+    unable_to_walk: useT('Unable to walk'),
+    dark_urine: useT('Dark urine'),
+    yellow_eyes: useT('Yellow eyes'),
+    persistent_vomiting: useT('Persistent vomiting'),
+  };
+  const friendWord = useT('friend');
+  const goodMorning = useT('Good morning');
+  const goodAfternoon = useT('Good afternoon');
+  const goodEvening = useT('Good evening');
+  const greetingText = (() => {
+    const h = new Date().getHours();
+    if (h < 12) return goodMorning;
+    if (h < 18) return goodAfternoon;
+    return goodEvening;
+  })();
+  const endemicLabel = useT('In a malaria-endemic region');
+  const notEndemicLabel = useT('Not in an endemic region');
+  const unknownEndemicLabel = useT('Endemicity unknown');
+  const noChangeLabel = useT('no change');
+  const vsLastLabel = useT('vs last');
+  const tSmsNotConfiguredTitle = useT('SMS escalation not configured');
+  const tSmsNotConfiguredMsg = useT(
+    'Set EXPO_PUBLIC_TWILIO_* env vars and rebuild the app so clinician alerts can be sent.',
+  );
+  const tRedFlagsTitle = useT('Your latest assessment has red flags');
+  const tRedFlagsMsg = useT(
+    'Open the History tab to review. If you feel worse, seek care immediately.',
+  );
+  const tLatestSeverity = useT('Latest severity');
+  const tAssessments = useT('Assessments');
+  const tEscalationsSent = useT('Escalations sent');
+  const tNewAssessment = useT('New assessment');
+  const tHistory = useT('History');
+  const tAskAI = useT('Ask AI');
 
   useFocusEffect(
     useCallback(() => {
@@ -63,18 +94,18 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
             <Text style={styles.greeting}>
-              {greeting()},{' '}
-              <Text style={styles.greetingBold}>{patient?.name ?? 'friend'}</Text>
+              {greetingText},{' '}
+              <Text style={styles.greetingBold}>{patient?.name ?? friendWord}</Text>
             </Text>
             <Text style={styles.subgreeting}>
               {patient?.countryName
                 ? `${patient.countryName}${patient.region ? `, ${patient.region}` : ''} · `
                 : ''}
               {patient?.endemicity === 'endemic'
-                ? 'In a malaria-endemic region'
+                ? endemicLabel
                 : patient?.endemicity === 'eliminated' || patient?.endemicity === 'non_endemic'
-                  ? 'Not in an endemic region'
-                  : 'Endemicity unknown'}
+                  ? notEndemicLabel
+                  : unknownEndemicLabel}
             </Text>
           </View>
           <SettingsSheet />
@@ -83,16 +114,16 @@ export default function HomeScreen() {
         {!twilioConfigured() && (
           <Banner
             tone="warning"
-            title="SMS escalation not configured"
-            message="Set EXPO_PUBLIC_TWILIO_* env vars and rebuild the app so clinician alerts can be sent."
+            title={tSmsNotConfiguredTitle}
+            message={tSmsNotConfiguredMsg}
           />
         )}
 
         {anyRedFlagLatest && (
           <Banner
             tone="danger"
-            title="Your latest assessment has red flags"
-            message="Open the History tab to review. If you feel worse, seek care immediately."
+            title={tRedFlagsTitle}
+            message={tRedFlagsMsg}
           />
         )}
 
@@ -100,15 +131,15 @@ export default function HomeScreen() {
           <GlassCard>
             <View style={{ gap: 10, alignItems: 'center', paddingVertical: 18 }}>
               <Feather name="activity" size={28} color={palette.primary} />
-              <Text style={styles.cardTitle}>No assessments yet</Text>
+              <Text style={styles.cardTitle}><T>No assessments yet</T></Text>
               <Text style={styles.cardBody}>
-                Log your first assessment to start tracking your recovery.
+                <T>Log your first assessment to start tracking your recovery.</T>
               </Text>
               <Pressable
                 onPress={() => router.push('/(tabs)/assessments')}
                 style={styles.primaryBtn}
               >
-                <Text style={styles.primaryBtnText}>Start assessment</Text>
+                <Text style={styles.primaryBtnText}><T>Start assessment</T></Text>
                 <Feather name="arrow-right" size={16} color={palette.white} />
               </Pressable>
             </View>
@@ -117,9 +148,11 @@ export default function HomeScreen() {
           <>
             <View style={styles.statRow}>
               <StatCard
-                label="Latest severity"
+                label={tLatestSeverity}
                 value={latest ? latest.severityScore.toFixed(1) : '—'}
                 delta={deltaSeverity}
+                noChangeLabel={noChangeLabel}
+                vsLastLabel={vsLastLabel}
                 color={
                   anyRedFlagLatest
                     ? palette.statusAlert
@@ -129,25 +162,29 @@ export default function HomeScreen() {
                 }
               />
               <StatCard
-                label="Assessments"
+                label={tAssessments}
                 value={String(stats.total)}
                 delta={null}
+                noChangeLabel={noChangeLabel}
+                vsLastLabel={vsLastLabel}
                 color={palette.primary}
               />
               <StatCard
-                label="Escalations sent"
+                label={tEscalationsSent}
                 value={String(
                   stats.escalations.filter((e) => e.status === 'sent').length,
                 )}
                 delta={null}
+                noChangeLabel={noChangeLabel}
+                vsLastLabel={vsLastLabel}
                 color={palette.statusAlert}
               />
             </View>
 
             <GlassCard>
-              <Text style={styles.cardTitle}>Severity over your last assessments</Text>
+              <Text style={styles.cardTitle}><T>Severity over your last assessments</T></Text>
               <Text style={styles.cardBody}>
-                Lower is better. Dots are individual assessments.
+                <T>Lower is better. Dots are individual assessments.</T>
               </Text>
               <LineChart
                 data={stats.severitySeries}
@@ -158,7 +195,7 @@ export default function HomeScreen() {
             </GlassCard>
 
             <GlassCard>
-              <Text style={styles.cardTitle}>Assessments per day (last 7)</Text>
+              <Text style={styles.cardTitle}><T>Assessments per day (last 7)</T></Text>
               <BarChart
                 data={stats.last7Days.map((d) => ({ label: d.day, value: d.count }))}
                 height={150}
@@ -166,15 +203,15 @@ export default function HomeScreen() {
             </GlassCard>
 
             <GlassCard>
-              <Text style={styles.cardTitle}>Red flags reported</Text>
+              <Text style={styles.cardTitle}><T>Red flags reported</T></Text>
               <Text style={styles.cardBody}>
-                Count across all assessments. Any flag triggers an SMS to your clinician.
+                <T>Count across all assessments. Any flag triggers an SMS to your clinician.</T>
               </Text>
               <View style={styles.flagGrid}>
                 {RED_FLAG_KEYS.map((k) => (
                   <FlagTile
                     key={k}
-                    label={RED_FLAG_LABEL[k]}
+                    label={redFlagLabels[k]}
                     count={stats.redFlagTotals[k]}
                     total={stats.total}
                   />
@@ -186,17 +223,17 @@ export default function HomeScreen() {
               <View style={styles.actionsRow}>
                 <ActionLink
                   icon="activity"
-                  label="New assessment"
+                  label={tNewAssessment}
                   onPress={() => router.push('/(tabs)/assessments')}
                 />
                 <ActionLink
                   icon="list"
-                  label="History"
+                  label={tHistory}
                   onPress={() => router.push('/(tabs)/history')}
                 />
                 <ActionLink
                   icon="message-circle"
-                  label="Ask AI"
+                  label={tAskAI}
                   onPress={() => router.push('/(tabs)/chat')}
                 />
               </View>
@@ -213,11 +250,15 @@ function StatCard({
   value,
   delta,
   color,
+  noChangeLabel,
+  vsLastLabel,
 }: {
   label: string;
   value: string;
   delta: number | null;
   color: string;
+  noChangeLabel: string;
+  vsLastLabel: string;
 }) {
   return (
     <View style={[styles.statCard, { borderColor: `${color}33` }]}>
@@ -238,8 +279,8 @@ function StatCard({
           ]}
         >
           {delta === 0
-            ? 'no change'
-            : `${delta > 0 ? '+' : ''}${delta.toFixed(1)} vs last`}
+            ? noChangeLabel
+            : `${delta > 0 ? '+' : ''}${delta.toFixed(1)} ${vsLastLabel}`}
         </Text>
       ) : null}
     </View>
@@ -289,13 +330,6 @@ function ActionLink({
       <Text style={styles.actionLinkText}>{label}</Text>
     </Pressable>
   );
-}
-
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
 }
 
 function formatDate(ts: number): string {
