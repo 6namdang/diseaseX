@@ -14,7 +14,8 @@ export default function TabLayout() {
         tabBarActiveTintColor: palette.primary,
         tabBarInactiveTintColor: palette.textTertiary,
         tabBarStyle: {
-          backgroundColor: Platform.OS === 'ios' ? 'rgba(248,250,252,0.4)' : 'rgba(248,250,252,0.94)',
+          backgroundColor:
+            Platform.OS === 'ios' ? 'rgba(248,250,252,0.4)' : 'rgba(248,250,252,0.94)',
           borderTopColor: glass.strokeSoft,
           borderTopWidth: 1,
           height: 64 + insets.bottom,
@@ -45,21 +46,25 @@ export default function TabLayout() {
         name="assessments"
         options={{
           title: 'Assess',
-          tabBarIcon: ({ color, size }) => <Feather name="activity" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="activity" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
-        name="logs"
+        name="history"
         options={{
-          title: 'Queue',
-          tabBarIcon: ({ color, size }) => <Feather name="layers" size={size} color={color} />,
+          title: 'History',
+          tabBarIcon: ({ color, size }) => <Feather name="list" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="chat"
         options={{
           title: 'Chat',
-          tabBarIcon: ({ color, size }) => <Feather name="message-circle" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="message-circle" size={size} color={color} />
+          ),
         }}
       />
     </Tabs>

@@ -1,10 +1,14 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
+import { useSQLiteContext } from 'expo-sqlite';
 import { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -13,490 +17,769 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Banner } from '../../components/ui/Banner';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { ScreenBackdrop } from '../../components/ui/ScreenBackdrop';
-import { fonts, glass, palette, radii, space } from '../../constants/designTokens';
+import { fonts, palette, radii, space } from '../../constants/designTokens';
 import {
-  MOCK_CLINICAL_ANALYSIS,
-  MOCK_DOSAGE_PREVIEW,
-  MOCK_OBSERVATION_STEP,
-  MOCK_STEP2,
-  MOCK_STEP3,
-  MOCK_STEP4,
-} from '../../data/mockClinical';
+  AssessmentInput,
+  RED_FLAG_KEYS,
+  computeSeverity,
+  getLatestAssessment,
+  insertAssessment,
+} from '../../db/assessmentRepo';
+import type { RedFlagKey, SymptomPhotoTag } from '../../db/types';
 import { useContentInsets } from '../../hooks/useContentInsets';
+import { usePatient } from '../../hooks/usePatient';
+import {
+  runEscalation,
+  type EscalationOutcome,
+} from '../../services/escalationService';
 
-type Step = 1 | 2 | 3 | 4;
+const SYMPTOM_OPTIONS: { key: string; label: string; icon: keyof typeof Feather.glyphMap }[] = [
+  { key: 'fever', label: 'Fever', icon: 'thermometer' },
+  { key: 'chills', label: 'Chills / shivering', icon: 'wind' },
+  { key: 'headache', label: 'Headache', icon: 'zap' },
+  { key: 'muscle_pain', label: 'Muscle/joint pain', icon: 'activity' },
+  { key: 'fatigue', label: 'Fatigue', icon: 'battery-charging' },
+  { key: 'nausea', label: 'Nausea', icon: 'alert-circle' },
+  { key: 'diarrhea', label: 'Diarrhea', icon: 'droplet' },
+  { key: 'cough', label: 'Cough', icon: 'mic-off' },
+];
 
-function MetricBar({ label, pct, color }: { label: string; pct: number; color: string }) {
-  return (
-    <View style={{ gap: 6 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={styles.metricLabel}>{label}</Text>
-        <Text style={styles.metricPct}>{pct}%</Text>
-      </View>
-      <View style={styles.metricTrack}>
-        <View style={[styles.metricFill, { width: `${pct}%`, backgroundColor: color }]} />
-      </View>
-    </View>
-  );
-}
+const RED_FLAG_DEFS: {
+  key: RedFlagKey;
+  question: string;
+}[] = [
+  { key: 'confused', question: 'Feeling confused or unusually drowsy?' },
+  { key: 'seizures', question: 'Any seizures?' },
+  { key: 'unable_to_walk', question: 'Unable to sit up or walk without help?' },
+  { key: 'dark_urine', question: 'Is your urine dark brown or black?' },
+  { key: 'yellow_eyes', question: 'Are your eyes or skin yellow?' },
+  { key: 'persistent_vomiting', question: 'Vomiting and cannot keep fluids down?' },
+];
 
-function PillToggle({
-  label,
-  active,
-  onPress,
-  activeColor,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-  activeColor: string;
-}) {
-  return (
-    <Pressable
-      onPress={() => {
-        Haptics.selectionAsync();
-        onPress();
-      }}
-      style={[
-        styles.pill,
-        active && { backgroundColor: `${activeColor}22`, borderColor: activeColor },
-      ]}
-    >
-      <Text style={[styles.pillText, active && { color: activeColor, fontFamily: fonts.semibold }]}>{label}</Text>
-    </Pressable>
-  );
-}
+const PHOTO_SLOTS: { tag: SymptomPhotoTag; label: string }[] = [
+  { tag: 'eyes', label: 'Eyes (check for yellow)' },
+  { tag: 'urine', label: 'Urine colour' },
+  { tag: 'palm', label: 'Palms (pallor check)' },
+  { tag: 'skin', label: 'Skin / rash' },
+];
+
+type Photo = { tag: SymptomPhotoTag; uri: string };
+
+type FormState = {
+  fever: boolean | null;
+  feverTemp: string;
+  vomiting: boolean | null;
+  canKeepFluidsDown: boolean | null;
+  symptomOnsetDays: string;
+  selectedSymptoms: Set<string>;
+  redFlags: Record<RedFlagKey, boolean>;
+  photos: Photo[];
+  notes: string;
+};
+
+const initialState: FormState = {
+  fever: null,
+  feverTemp: '',
+  vomiting: null,
+  canKeepFluidsDown: null,
+  symptomOnsetDays: '',
+  selectedSymptoms: new Set(),
+  redFlags: {
+    confused: false,
+    seizures: false,
+    unable_to_walk: false,
+    dark_urine: false,
+    yellow_eyes: false,
+    persistent_vomiting: false,
+  },
+  photos: [],
+  notes: '',
+};
 
 export default function AssessmentsScreen() {
   const insets = useContentInsets();
-  const [step, setStep] = useState<Step>(1);
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const router = useRouter();
+  const db = useSQLiteContext();
+  const { patient } = usePatient();
 
-  const [feverDays, setFeverDays] = useState(3);
-  const [obsToggles, setObsToggles] = useState(() => MOCK_STEP2.obsChips.map(() => false));
-  const [intakePoor, setIntakePoor] = useState<boolean | null>(null);
+  const [form, setForm] = useState<FormState>(initialState);
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<{
+    severity: number;
+    outcome: EscalationOutcome;
+    trend: 'better' | 'worse' | 'same' | null;
+  } | null>(null);
 
-  const [supplyInject, setSupplyInject] = useState(true);
-  const [supplyRdt, setSupplyRdt] = useState(false);
+  if (!patient || !patient.onboardingCompletedAt) {
+    return (
+      <ScreenBackdrop>
+        <View
+          style={[
+            styles.empty,
+            { paddingTop: insets.top + 80, paddingHorizontal: space.padH },
+          ]}
+        >
+          <Banner
+            tone="warning"
+            title="Finish onboarding first"
+            message="Please complete the welcome steps so the app can tailor dosing and escalations to you."
+          />
+        </View>
+      </ScreenBackdrop>
+    );
+  }
+  const currentPatient = patient;
 
-  const [notes, setNotes] = useState('');
+  function update<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
 
-  const pickImage = async () => {
-    const r = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!r.granted) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.85,
+  function toggleSymptom(key: string) {
+    setForm((prev) => {
+      const next = new Set(prev.selectedSymptoms);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return { ...prev, selectedSymptoms: next };
     });
-    if (!res.canceled && res.assets[0]?.uri) setPhotoUri(res.assets[0].uri);
-  };
+  }
 
-  const pills = [1, 2, 3, 4] as const;
-  const goNext = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (step === 4) {
-      Alert.alert('Queued (mock)', 'Assessment stored locally — sync & logic not implemented.', [
-        {
-          text: 'OK',
-          onPress: () => {
-            setStep(1);
-            setPhotoUri(null);
-            setNotes('');
-          },
-        },
-      ]);
-      return;
+  function toggleRedFlag(key: RedFlagKey) {
+    setForm((prev) => ({
+      ...prev,
+      redFlags: { ...prev.redFlags, [key]: !prev.redFlags[key] },
+    }));
+  }
+
+  async function addPhoto(tag: SymptomPhotoTag, source: 'camera' | 'library') {
+    try {
+      let res: ImagePicker.ImagePickerResult;
+      if (source === 'camera') {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert('Camera permission required', 'Enable camera access in Settings.');
+          return;
+        }
+        res = await ImagePicker.launchCameraAsync({
+          quality: 0.6,
+          allowsEditing: false,
+        });
+      } else {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert('Photo library permission required');
+          return;
+        }
+        res = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          quality: 0.6,
+          allowsEditing: false,
+        });
+      }
+      if (res.canceled || !res.assets?.[0]) return;
+      const uri = res.assets[0].uri;
+      setForm((prev) => ({
+        ...prev,
+        photos: [...prev.photos.filter((p) => p.tag !== tag), { tag, uri }],
+      }));
+    } catch (e: any) {
+      Alert.alert('Photo error', e?.message ?? 'Unknown error');
     }
-    setStep((s) => ((s + 1) as Step));
-  };
+  }
 
-  const clinicalVisible = step === 1 && photoUri;
-  const pressFx = Platform.OS !== 'web';
+  function removePhoto(tag: SymptomPhotoTag) {
+    setForm((prev) => ({ ...prev, photos: prev.photos.filter((p) => p.tag !== tag) }));
+  }
 
-  const toggleObs = (i: number) => {
-    setObsToggles((prev) => prev.map((v, j) => (j === i ? !v : v)));
-  };
+  async function submit() {
+    if (saving) return;
+    try {
+      setSaving(true);
+
+      const prev = await getLatestAssessment(db);
+
+      const input: AssessmentInput = {
+        fever: form.fever,
+        feverTempC: toFloat(form.feverTemp),
+        vomiting: form.vomiting,
+        canKeepFluidsDown: form.canKeepFluidsDown,
+        symptomOnsetDaysAgo: toInt(form.symptomOnsetDays),
+        symptoms: Array.from(form.selectedSymptoms),
+        redFlags: form.redFlags,
+        notes: form.notes.trim() || null,
+        photos: form.photos.map((p) => ({ symptomTag: p.tag, fileUri: p.uri })),
+      };
+
+      const severity = computeSeverity(input);
+      const assessmentId = await insertAssessment(db, input);
+
+      // Reload the fully-persisted assessment for escalation (so id + timestamps match).
+      const saved = await getLatestAssessment(db);
+      if (!saved || saved.id !== assessmentId) {
+        throw new Error('Failed to persist assessment');
+      }
+
+      const outcome = await runEscalation(db, currentPatient, saved);
+
+      const trend: 'better' | 'worse' | 'same' | null = prev
+        ? severity < prev.severityScore
+          ? 'better'
+          : severity > prev.severityScore
+            ? 'worse'
+            : 'same'
+        : null;
+
+      if (Platform.OS !== 'web') {
+        await Haptics.notificationAsync(
+          outcome.kind === 'sent'
+            ? Haptics.NotificationFeedbackType.Warning
+            : Haptics.NotificationFeedbackType.Success,
+        );
+      }
+
+      setResult({ severity, outcome, trend });
+      setForm(initialState);
+    } catch (e: any) {
+      Alert.alert('Could not save assessment', e?.message ?? 'Unknown error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (result) {
+    return (
+      <ResultScreen
+        result={result}
+        onDone={() => {
+          setResult(null);
+          router.replace('/(tabs)');
+        }}
+        onAnother={() => setResult(null)}
+      />
+    );
+  }
+
+  const canSubmit =
+    form.fever !== null && form.vomiting !== null && form.canKeepFluidsDown !== null;
 
   return (
     <ScreenBackdrop>
-      <View style={[styles.root, { paddingTop: insets.top }]}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={{
-            paddingHorizontal: space.padH,
-            paddingBottom: insets.bottom + 120,
-            gap: space.gap,
-          }}
-          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.content,
+            {
+              paddingTop: insets.top + 14,
+              paddingBottom: insets.bottom + 120,
+              paddingHorizontal: space.padH,
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.stepMeta}>Step {step} of 4 · mock triage</Text>
-          <View style={styles.progressRow}>
-            {pills.map((p) => (
-              <View
-                key={p}
-                style={[styles.progressPill, p <= step ? styles.progressOn : styles.progressOff]}
-              />
-            ))}
+          <View style={styles.headerBlock}>
+            <Text style={styles.h1}>How are you feeling today?</Text>
+            <Text style={styles.sub}>
+              Takes about a minute. Be honest — this drives the advice and whether your
+              clinician is alerted.
+            </Text>
           </View>
 
-          {step === 1 && (
-            <>
-              {!photoUri ? (
-                <Pressable onPress={pickImage} style={styles.dashed}>
-                  <Feather name="video" size={28} color={palette.primary} />
-                  <Text style={styles.dashedTitle}>{MOCK_OBSERVATION_STEP.dashedTitle}</Text>
-                  <Text style={styles.dashedHint}>{MOCK_OBSERVATION_STEP.dashedHint}</Text>
-                </Pressable>
-              ) : (
-                <View style={styles.previewWrap}>
-                  <Image source={{ uri: photoUri }} style={styles.previewImg} />
-                  <Pressable
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setPhotoUri(null);
-                    }}
-                    style={styles.clearPhoto}
-                  >
-                    <Feather name="x" size={18} color={palette.white} />
-                  </Pressable>
-                </View>
-              )}
+          <GlassCard>
+            <Text style={styles.cardH}>Key vitals</Text>
+            <Question label="Do you have a fever?">
+              <YesNo
+                value={form.fever}
+                onChange={(v) => update('fever', v)}
+              />
+            </Question>
+            {form.fever && (
+              <Question label="Temperature (°C) — if you measured it">
+                <TextInput
+                  value={form.feverTemp}
+                  onChangeText={(t) => update('feverTemp', sanitizeDecimal(t))}
+                  style={styles.input}
+                  keyboardType="decimal-pad"
+                  placeholder="e.g. 38.7"
+                  placeholderTextColor={palette.textTertiary}
+                />
+              </Question>
+            )}
+            <Question label="Are you vomiting?">
+              <YesNo
+                value={form.vomiting}
+                onChange={(v) => update('vomiting', v)}
+              />
+            </Question>
+            <Question label="Can you keep water down?">
+              <YesNo
+                value={form.canKeepFluidsDown}
+                onChange={(v) => update('canKeepFluidsDown', v)}
+              />
+            </Question>
+            <Question label="How many days ago did symptoms start?">
+              <TextInput
+                value={form.symptomOnsetDays}
+                onChangeText={(t) => update('symptomOnsetDays', t.replace(/[^0-9]/g, ''))}
+                style={styles.input}
+                keyboardType="number-pad"
+                placeholder="e.g. 2"
+                placeholderTextColor={palette.textTertiary}
+              />
+            </Question>
+          </GlassCard>
 
-              {clinicalVisible ? (
-                <GlassCard intensity={34}>
-                  <View style={styles.degreeRow}>
-                    <Text style={styles.microLabel}>Pattern tag</Text>
-                    <View
+          <GlassCard>
+            <Text style={styles.cardH}>Symptoms — tap all that apply</Text>
+            <View style={styles.symptomGrid}>
+              {SYMPTOM_OPTIONS.map((s) => {
+                const active = form.selectedSymptoms.has(s.key);
+                return (
+                  <Pressable
+                    key={s.key}
+                    onPress={() => toggleSymptom(s.key)}
+                    style={[styles.symptomChip, active && styles.symptomChipActive]}
+                  >
+                    <Feather
+                      name={s.icon}
+                      size={14}
+                      color={active ? palette.white : palette.primary}
+                    />
+                    <Text
                       style={[
-                        styles.badge,
-                        { backgroundColor: `${MOCK_CLINICAL_ANALYSIS.badgeColor}22` },
+                        styles.symptomChipText,
+                        active && styles.symptomChipTextActive,
                       ]}
                     >
-                      <Text style={[styles.badgeText, { color: MOCK_CLINICAL_ANALYSIS.badgeColor }]}>
-                        {MOCK_CLINICAL_ANALYSIS.badgeLabel}
-                      </Text>
+                      {s.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </GlassCard>
+
+          <GlassCard>
+            <Text style={styles.cardH}>Red flags — safety check</Text>
+            <Text style={styles.sub}>
+              Any "Yes" below will immediately text your clinician.
+            </Text>
+            <View style={{ gap: 10, marginTop: 8 }}>
+              {RED_FLAG_DEFS.map((rf) => (
+                <View key={rf.key} style={styles.rfRow}>
+                  <Text style={styles.rfQ}>{rf.question}</Text>
+                  <YesNo
+                    value={form.redFlags[rf.key]}
+                    onChange={(v) => {
+                      if (v === null) return;
+                      setForm((prev) => ({
+                        ...prev,
+                        redFlags: { ...prev.redFlags, [rf.key]: v },
+                      }));
+                    }}
+                  />
+                </View>
+              ))}
+            </View>
+          </GlassCard>
+
+          <GlassCard>
+            <Text style={styles.cardH}>Photos (optional)</Text>
+            <Text style={styles.sub}>
+              Photos stay on your device. They are not sent in escalation SMS (text only).
+            </Text>
+            <View style={{ gap: 10, marginTop: 10 }}>
+              {PHOTO_SLOTS.map((slot) => {
+                const existing = form.photos.find((p) => p.tag === slot.tag);
+                return (
+                  <View key={slot.tag} style={styles.photoRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.photoLabel}>{slot.label}</Text>
+                      {existing ? (
+                        <Image source={{ uri: existing.uri }} style={styles.thumb} />
+                      ) : null}
+                    </View>
+                    <View style={{ gap: 6 }}>
+                      <Pressable
+                        onPress={() => addPhoto(slot.tag, 'camera')}
+                        style={styles.iconBtn}
+                      >
+                        <Feather name="camera" size={16} color={palette.primary} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => addPhoto(slot.tag, 'library')}
+                        style={styles.iconBtn}
+                      >
+                        <Feather name="image" size={16} color={palette.primary} />
+                      </Pressable>
+                      {existing ? (
+                        <Pressable
+                          onPress={() => removePhoto(slot.tag)}
+                          style={styles.iconBtn}
+                        >
+                          <Feather name="trash-2" size={16} color={palette.statusAlert} />
+                        </Pressable>
+                      ) : null}
                     </View>
                   </View>
-                  <Text style={styles.microLabel}>{MOCK_CLINICAL_ANALYSIS.patternBarLabel}</Text>
-                  <View style={styles.healTrack}>
-                    <View
-                      style={[
-                        styles.healFill,
-                        {
-                          width: `${MOCK_CLINICAL_ANALYSIS.patternBarPct}%`,
-                          backgroundColor: MOCK_CLINICAL_ANALYSIS.barColor,
-                        },
-                      ]}
-                    />
-                  </View>
-                  <View style={{ gap: 12, marginTop: 8 }}>
-                    {MOCK_CLINICAL_ANALYSIS.metrics.map((m) => (
-                      <MetricBar key={m.label} label={m.label} pct={m.pct} color={m.color} />
-                    ))}
-                  </View>
-                  <Text style={[styles.microLabel, { marginTop: 14 }]}>Clinical description</Text>
-                  <Text style={styles.clinicalPara}>{MOCK_CLINICAL_ANALYSIS.description}</Text>
-                  <View style={styles.compareBlock}>
-                    <Text style={styles.microLabel}>Comparison note</Text>
-                    <Text style={styles.compareText}>{MOCK_CLINICAL_ANALYSIS.comparison}</Text>
-                  </View>
-                </GlassCard>
-              ) : null}
-            </>
-          )}
+                );
+              })}
+            </View>
+          </GlassCard>
 
-          {step === 2 && (
-            <GlassCard intensity={36}>
-              <Text style={styles.formTitle}>{MOCK_STEP2.title}</Text>
-              <Text style={styles.fieldLabel}>{MOCK_STEP2.feverLabel}</Text>
-              <View style={styles.painRow}>
-                {Array.from({ length: 8 }, (_, n) => (
-                  <Pressable
-                    key={n}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      setFeverDays(n);
-                    }}
-                    style={[
-                      styles.painDot,
-                      feverDays === n && { backgroundColor: palette.primary, borderColor: palette.primary },
-                    ]}
-                  >
-                    <Text style={[styles.painDotText, feverDays === n && { color: palette.white }]}>{n}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Text style={styles.fieldLabel}>{MOCK_STEP2.obsLabel}</Text>
-              <View style={styles.chipRow}>
-                {MOCK_STEP2.obsChips.map((label, i) => (
-                  <PillToggle
-                    key={label}
-                    label={label}
-                    active={obsToggles[i] ?? false}
-                    onPress={() => toggleObs(i)}
-                    activeColor={palette.statusMonitor}
-                  />
-                ))}
-              </View>
-              <Text style={styles.fieldLabel}>{MOCK_STEP2.intakeLabel}</Text>
-              <View style={styles.yesNoRow}>
-                <Pressable
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setIntakePoor(true);
-                  }}
-                  style={[
-                    styles.yesNoBtn,
-                    intakePoor === true && {
-                      backgroundColor: `${palette.statusAlert}18`,
-                      borderColor: palette.statusAlert,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.yesNoText, intakePoor === true && { color: palette.statusAlert }]}>Yes</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setIntakePoor(false);
-                  }}
-                  style={[
-                    styles.yesNoBtn,
-                    intakePoor === false && { borderColor: palette.primary, backgroundColor: `${palette.primary}14` },
-                  ]}
-                >
-                  <Text style={[styles.yesNoText, intakePoor === false && { color: palette.primary }]}>No</Text>
-                </Pressable>
-              </View>
-            </GlassCard>
-          )}
-
-          {step === 3 && (
-            <GlassCard intensity={36}>
-              <Text style={styles.formTitle}>{MOCK_STEP3.title}</Text>
-              <Text style={styles.fieldLabel}>{MOCK_STEP3.q1}</Text>
-              <View style={styles.chipRow}>
-                <PillToggle
-                  label="Yes"
-                  active={supplyInject}
-                  onPress={() => setSupplyInject(true)}
-                  activeColor={palette.statusGood}
-                />
-                <PillToggle
-                  label="No"
-                  active={!supplyInject}
-                  onPress={() => setSupplyInject(false)}
-                  activeColor={palette.textTertiary}
-                />
-              </View>
-              <Text style={styles.fieldLabel}>{MOCK_STEP3.q2}</Text>
-              <View style={styles.chipRow}>
-                <PillToggle
-                  label="Yes"
-                  active={supplyRdt}
-                  onPress={() => setSupplyRdt(true)}
-                  activeColor={palette.statusGood}
-                />
-                <PillToggle
-                  label="No"
-                  active={!supplyRdt}
-                  onPress={() => setSupplyRdt(false)}
-                  activeColor={palette.textTertiary}
-                />
-              </View>
-            </GlassCard>
-          )}
-
-          {step === 4 && (
-            <GlassCard intensity={36}>
-              <Text style={styles.formTitle}>{MOCK_STEP4.title}</Text>
-              <Text style={styles.fieldLabel}>Free text</Text>
-              <TextInput
-                style={styles.notesInput}
-                multiline
-                placeholder={MOCK_STEP4.placeholder}
-                placeholderTextColor={palette.textTertiary}
-                value={notes}
-                onChangeText={setNotes}
-              />
-              <View style={styles.doseBox}>
-                <Text style={styles.microLabel}>Dosage preview (mock)</Text>
-                <Text style={styles.doseLine}>
-                  {MOCK_DOSAGE_PREVIEW.weightKg} kg · {MOCK_DOSAGE_PREVIEW.route}
-                </Text>
-                <Text style={styles.doseLine}>{MOCK_DOSAGE_PREVIEW.doseMg}</Text>
-              </View>
-            </GlassCard>
-          )}
+          <GlassCard>
+            <Text style={styles.cardH}>Notes (optional)</Text>
+            <TextInput
+              value={form.notes}
+              onChangeText={(t) => update('notes', t)}
+              style={[styles.input, { minHeight: 90, textAlignVertical: 'top' }]}
+              multiline
+              placeholder="Anything else the clinician should know?"
+              placeholderTextColor={palette.textTertiary}
+            />
+          </GlassCard>
         </ScrollView>
 
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+        <View
+          style={[
+            styles.submitBar,
+            {
+              paddingBottom: insets.bottom + 16,
+              paddingHorizontal: space.padH,
+            },
+          ]}
+        >
           <Pressable
-            onPress={goNext}
+            onPress={submit}
+            disabled={!canSubmit || saving}
             style={({ pressed }) => [
-              styles.footerBtn,
-              pressFx && pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+              styles.submitBtn,
+              (!canSubmit || saving) && { opacity: 0.4 },
+              pressed && { transform: [{ scale: 0.98 }] },
             ]}
           >
-            <Text style={styles.footerBtnText}>{step < 4 ? 'Continue' : 'Save (mock)'}</Text>
-            <Feather name="arrow-right" size={20} color={palette.white} />
+            {saving ? (
+              <ActivityIndicator color={palette.white} />
+            ) : (
+              <>
+                <Text style={styles.submitText}>Save assessment</Text>
+                <Feather name="check-circle" size={18} color={palette.white} />
+              </>
+            )}
           </Pressable>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </ScreenBackdrop>
   );
 }
 
+function ResultScreen({
+  result,
+  onDone,
+  onAnother,
+}: {
+  result: { severity: number; outcome: EscalationOutcome; trend: 'better' | 'worse' | 'same' | null };
+  onDone: () => void;
+  onAnother: () => void;
+}) {
+  const insets = useContentInsets();
+  const { outcome, severity, trend } = result;
+
+  let tone: 'success' | 'warning' | 'danger' = 'success';
+  let title = 'Assessment saved';
+  let message = '';
+  switch (outcome.kind) {
+    case 'no_red_flags':
+      tone = 'success';
+      message = 'No red flags — no alert was sent.';
+      break;
+    case 'no_clinician':
+      tone = 'warning';
+      message =
+        'Red flags detected but no clinician phone on file. Please update your contacts.';
+      break;
+    case 'cooldown':
+      tone = 'warning';
+      message =
+        'Red flags present, but your clinician was recently alerted about the same issues (6h cooldown).';
+      break;
+    case 'sent':
+      tone = 'danger';
+      title = 'Clinician alerted by SMS';
+      message = `An SMS was sent to your clinician (Twilio id ${outcome.twilioSid.slice(0, 10)}…).`;
+      break;
+    case 'failed':
+      tone = 'danger';
+      title = 'SMS alert FAILED';
+      message = `Could not text your clinician: ${outcome.error}. Please call them directly.`;
+      break;
+    case 'disabled':
+      tone = 'danger';
+      title = 'SMS alert disabled';
+      message =
+        'Red flags detected, but SMS is not configured. Please call your clinician directly.';
+      break;
+  }
+
+  return (
+    <ScreenBackdrop>
+      <ScrollView
+        contentContainerStyle={{
+          paddingTop: insets.top + 40,
+          paddingBottom: insets.bottom + 40,
+          paddingHorizontal: space.padH,
+          gap: 16,
+        }}
+      >
+        <View style={{ alignItems: 'center', gap: 10 }}>
+          <Feather
+            name={
+              outcome.kind === 'sent' || outcome.kind === 'failed' || outcome.kind === 'disabled'
+                ? 'alert-octagon'
+                : outcome.kind === 'cooldown' || outcome.kind === 'no_clinician'
+                  ? 'alert-triangle'
+                  : 'check-circle'
+            }
+            size={56}
+            color={
+              tone === 'danger'
+                ? palette.statusAlert
+                : tone === 'warning'
+                  ? palette.statusMonitor
+                  : palette.statusGood
+            }
+          />
+          <Text style={styles.resTitle}>{title}</Text>
+          <Text style={styles.resSeverity}>
+            Severity score: <Text style={{ fontFamily: fonts.bold }}>{severity.toFixed(1)}</Text>
+            {trend ? (
+              <Text
+                style={{
+                  color:
+                    trend === 'better'
+                      ? palette.statusGood
+                      : trend === 'worse'
+                        ? palette.statusAlert
+                        : palette.textTertiary,
+                  fontFamily: fonts.medium,
+                }}
+              >
+                {' '}
+                · {trend === 'better' ? 'improving' : trend === 'worse' ? 'worsening' : 'unchanged'}
+              </Text>
+            ) : null}
+          </Text>
+        </View>
+
+        <Banner tone={tone} title={title} message={message} />
+
+        <View style={{ gap: 10 }}>
+          <Pressable onPress={onDone} style={styles.submitBtn}>
+            <Text style={styles.submitText}>Back to dashboard</Text>
+          </Pressable>
+          <Pressable
+            onPress={onAnother}
+            style={[styles.submitBtn, { backgroundColor: 'transparent' }]}
+          >
+            <Text style={[styles.submitText, { color: palette.primary }]}>
+              Log another
+            </Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </ScreenBackdrop>
+  );
+}
+
+function Question({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={{ gap: 6, marginTop: 12 }}>
+      <Text style={styles.qLabel}>{label}</Text>
+      {children}
+    </View>
+  );
+}
+
+function YesNo({
+  value,
+  onChange,
+}: {
+  value: boolean | null;
+  onChange: (v: boolean | null) => void;
+}) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      <Pressable
+        onPress={() => onChange(true)}
+        style={[styles.yn, value === true && styles.ynYes]}
+      >
+        <Text style={[styles.ynText, value === true && styles.ynTextActive]}>Yes</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => onChange(false)}
+        style={[styles.yn, value === false && styles.ynNo]}
+      >
+        <Text style={[styles.ynText, value === false && styles.ynTextActive]}>No</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function toInt(v: string): number | null {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : null;
+}
+function toFloat(v: string): number | null {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : null;
+}
+function sanitizeDecimal(t: string): string {
+  return t.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+}
+
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: 'transparent' },
-  scroll: { flex: 1, backgroundColor: 'transparent' },
-  stepMeta: { fontFamily: fonts.medium, fontSize: 13, color: palette.textSecondary },
-  progressRow: { flexDirection: 'row', gap: 8 },
-  progressPill: { flex: 1, height: 6, borderRadius: 3 },
-  progressOn: { backgroundColor: palette.primary },
-  progressOff: { backgroundColor: palette.borderLight },
-  dashed: {
-    height: 220,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: glass.stroke,
-    borderRadius: radii.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: glass.fill,
+  empty: { gap: 14 },
+  content: { gap: 14 },
+  headerBlock: { gap: 6, marginBottom: 2 },
+  h1: { fontFamily: fonts.bold, fontSize: 22, color: palette.secondary },
+  sub: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: palette.textSecondary,
+    lineHeight: 18,
   },
-  dashedTitle: { fontFamily: fonts.semibold, fontSize: 16, color: palette.secondary },
-  dashedHint: { fontFamily: fonts.regular, fontSize: 14, color: palette.textTertiary, textAlign: 'center', paddingHorizontal: 20 },
-  previewWrap: { borderRadius: radii.lg, overflow: 'hidden', position: 'relative', borderWidth: 1, borderColor: glass.stroke },
-  previewImg: { width: '100%', height: 220, backgroundColor: palette.borderLight },
-  clearPhoto: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: `${palette.secondary}99`,
-    alignItems: 'center',
-    justifyContent: 'center',
+  cardH: {
+    fontFamily: fonts.semibold,
+    fontSize: 15,
+    color: palette.secondary,
+    marginBottom: 4,
   },
-  degreeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  microLabel: {
-    fontFamily: fonts.medium,
-    fontSize: 11,
-    color: palette.textTertiary,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  badgeText: { fontFamily: fonts.semibold, fontSize: 12 },
-  healTrack: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: palette.borderLight,
-    overflow: 'hidden',
-    marginTop: 4,
-  },
-  healFill: { height: '100%', borderRadius: 4 },
-  metricLabel: { fontFamily: fonts.medium, fontSize: 13, color: palette.textSecondary },
-  metricPct: { fontFamily: fonts.semibold, fontSize: 13, color: palette.text },
-  metricTrack: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: palette.borderLight,
-    overflow: 'hidden',
-  },
-  metricFill: { height: '100%', borderRadius: 4 },
-  clinicalPara: { fontFamily: fonts.regular, fontSize: 15, color: palette.text, lineHeight: 22 },
-  compareBlock: {
-    marginTop: 8,
-    padding: 12,
-    borderRadius: radii.sm,
-    backgroundColor: `${palette.primary}12`,
-  },
-  compareText: { fontFamily: fonts.regular, fontSize: 14, color: palette.textSecondary, lineHeight: 20, marginTop: 6 },
-  formTitle: { fontFamily: fonts.semibold, fontSize: 17, color: palette.secondary, marginBottom: 4 },
-  fieldLabel: { fontFamily: fonts.medium, fontSize: 14, color: palette.textSecondary },
-  painRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  painDot: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: glass.stroke,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: glass.fill,
-  },
-  painDotText: { fontFamily: fonts.semibold, fontSize: 13, color: palette.text },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  pill: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: glass.stroke,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-  },
-  pillText: { fontFamily: fonts.medium, fontSize: 14, color: palette.textSecondary },
-  yesNoRow: { flexDirection: 'row', gap: 12 },
-  yesNoBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: radii.lg,
-    borderWidth: 1.5,
-    borderColor: glass.stroke,
-    alignItems: 'center',
-    backgroundColor: glass.fill,
-  },
-  yesNoText: { fontFamily: fonts.semibold, fontSize: 15, color: palette.textSecondary },
-  notesInput: {
-    minHeight: 120,
-    borderWidth: 1,
-    borderColor: glass.stroke,
-    borderRadius: radii.md,
-    padding: 14,
+  qLabel: { fontFamily: fonts.medium, fontSize: 13, color: palette.textSecondary },
+  input: {
     fontFamily: fonts.regular,
     fontSize: 15,
     color: palette.text,
-    textAlignVertical: 'top',
-    backgroundColor: 'rgba(255,255,255,0.45)',
-  },
-  doseBox: {
-    marginTop: 14,
-    padding: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: glass.stroke,
-    backgroundColor: `${palette.primary}0F`,
-    gap: 4,
+    borderColor: palette.border,
+    backgroundColor: 'rgba(255,255,255,0.8)',
   },
-  doseLine: { fontFamily: fonts.regular, fontSize: 14, color: palette.textSecondary },
-  footer: {
+  yn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+  },
+  ynYes: { backgroundColor: palette.statusAlert, borderColor: palette.statusAlert },
+  ynNo: { backgroundColor: palette.primary, borderColor: palette.primary },
+  ynText: { fontFamily: fonts.medium, fontSize: 14, color: palette.secondary },
+  ynTextActive: { color: palette.white },
+  symptomGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  symptomChip: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+  },
+  symptomChipActive: {
+    backgroundColor: palette.primary,
+    borderColor: palette.primary,
+  },
+  symptomChipText: { fontFamily: fonts.medium, fontSize: 13, color: palette.secondary },
+  symptomChipTextActive: { color: palette.white },
+  rfRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  rfQ: { flex: 1, fontFamily: fonts.regular, fontSize: 13, color: palette.secondary },
+  photoRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-start',
+    padding: 8,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  photoLabel: {
+    fontFamily: fonts.medium,
+    fontSize: 13,
+    color: palette.secondary,
+    marginBottom: 6,
+  },
+  thumb: {
+    width: 120,
+    height: 90,
+    borderRadius: radii.sm,
+    backgroundColor: palette.background,
+  },
+  iconBtn: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+  },
+  submitBar: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: space.padH,
     paddingTop: 12,
+    backgroundColor: 'rgba(248,250,252,0.92)',
     borderTopWidth: 1,
-    borderTopColor: glass.strokeSoft,
-    backgroundColor: 'rgba(248,250,252,0.88)',
+    borderTopColor: palette.border,
   },
-  footerBtn: {
-    backgroundColor: palette.primary,
-    borderRadius: radii.lg,
-    paddingVertical: 18,
+  submitBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
+    gap: 8,
+    backgroundColor: palette.primary,
+    paddingVertical: 16,
+    borderRadius: radii.md,
   },
-  footerBtnText: { fontFamily: fonts.semibold, fontSize: 16, color: palette.white },
+  submitText: { fontFamily: fonts.semibold, fontSize: 16, color: palette.white },
+
+  resTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 20,
+    color: palette.secondary,
+    textAlign: 'center',
+  },
+  resSeverity: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    color: palette.textSecondary,
+  },
 });

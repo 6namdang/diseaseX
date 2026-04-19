@@ -1,19 +1,20 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Redirect } from 'expo-router';
+import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { ONBOARDING_KEY } from '../constants/appStorage';
 import { palette } from '../constants/designTokens';
+import { isOnboarded } from '../db/patientRepo';
 
 export default function Index() {
+  const db = useSQLiteContext();
   const [route, setRoute] = useState<'welcome' | 'tabs' | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const v = await AsyncStorage.getItem(ONBOARDING_KEY);
-        if (!cancelled) setRoute(v === '1' ? 'tabs' : 'welcome');
+        const ok = await isOnboarded(db);
+        if (!cancelled) setRoute(ok ? 'tabs' : 'welcome');
       } catch {
         if (!cancelled) setRoute('welcome');
       }
@@ -21,11 +22,18 @@ export default function Index() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [db]);
 
   if (route === null) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.background }}>
+      <View
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: palette.background,
+        }}
+      >
         <ActivityIndicator color={palette.primary} />
       </View>
     );

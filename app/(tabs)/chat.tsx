@@ -1,7 +1,10 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useSQLiteContext } from 'expo-sqlite';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -11,81 +14,253 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import Markdown from 'react-native-markdown-display';
+import { Banner } from '../../components/ui/Banner';
 import { ScreenBackdrop } from '../../components/ui/ScreenBackdrop';
 import { fonts, glass, palette, radii, space } from '../../constants/designTokens';
-import { MOCK_CHAT_AI, MOCK_CHAT_HUMAN, type ChatMsg } from '../../data/mockClinical';
+import { clearChatHistory, insertChatMessage, listChatMessages } from '../../db/chatRepo';
+import type { ChatMessage } from '../../db/types';
 import { useContentInsets } from '../../hooks/useContentInsets';
+import { usePatient } from '../../hooks/usePatient';
+import RAGService from '../../services/ragService';
 
-type Channel = 'ai' | 'human';
+type UiMessage = ChatMessage | { id: string; role: 'assistant'; content: string; thinking: string; pending: true; createdAt: number };
+
+function ThinkingBubble({ text, streaming }: { text: string; streaming: boolean }) {
+  const [open, setOpen] = useState(false);
+  if (!text && !streaming) return null;
+  return (
+    <Pressable onPress={() => setOpen((o) => !o)} style={thinkStyles.wrap}>
+      <View style={thinkStyles.header}>
+        <Feather name="cpu" size={12} color={palette.textTertiary} />
+        <Text style={thinkStyles.label}>
+          {streaming ? 'Thinking…' : `Thought process (${text.length} chars)`}
+        </Text>
+        <Feather
+          name={open ? 'chevron-up' : 'chevron-down'}
+          size={14}
+          color={palette.textTertiary}
+        />
+      </View>
+      {open ? <Text style={thinkStyles.body}>{text.trim()}</Text> : null}
+    </Pressable>
+  );
+}
+
+const thinkStyles = StyleSheet.create({
+  wrap: {
+    marginBottom: 6,
+    padding: 10,
+    borderRadius: radii.lg,
+    backgroundColor: 'rgba(0,0,0,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+  },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  label: {
+    flex: 1,
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    color: palette.textTertiary,
+    fontStyle: 'italic',
+  },
+  body: {
+    marginTop: 8,
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: palette.textSecondary,
+    lineHeight: 18,
+  },
+});
 
 export default function ChatScreen() {
   const insets = useContentInsets();
-  const [channel, setChannel] = useState<Channel>('ai');
+  const db = useSQLiteContext();
+  const { patient, refresh: refreshPatient } = usePatient();
+
+  const [messages, setMessages] = useState<UiMessage[]>([]);
+  const [pending, setPending] = useState<{
+    id: string;
+    answer: string;
+    thinking: string;
+  } | null>(null);
   const [draft, setDraft] = useState('');
-  const [aiMsgs, setAiMsgs] = useState(MOCK_CHAT_AI);
-  const [humanMsgs, setHumanMsgs] = useState(MOCK_CHAT_HUMAN);
-  const listRef = useRef<FlatList<ChatMsg>>(null);
 
-  const messages = channel === 'ai' ? aiMsgs : humanMsgs;
-  const pressFx = Platform.OS !== 'web';
+  const [downloading, setDownloading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [downloadLabel, setDownloadLabel] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
 
-  const send = () => {
-    const t = draft.trim();
-    if (!t) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const msg: ChatMsg = {
-      id: `${Date.now()}`,
-      from: 'user',
-      text: t,
-      time: new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
+  const listRef = useRef<FlatList<UiMessage>>(null);
+
+  const loadHistory = useCallback(async () => {
+    const rows = await listChatMessages(db, 100);
+    setMessages(rows);
+  }, [db]);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshPatient();
+    }, [refreshPatient]),
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (ready) return;
+      try {
+        setError(null);
+        setDownloading(true);
+        await RAGService.downloadModels((p, label) => {
+          if (cancelled) return;
+          setProgress(p);
+          setDownloadLabel(label);
+        });
+        if (cancelled) return;
+        setDownloading(false);
+
+        setLoading(true);
+        await RAGService.init();
+        if (cancelled) return;
+        setLoading(false);
+        setReady(true);
+      } catch (e: any) {
+        if (cancelled) return;
+        setDownloading(false);
+        setLoading(false);
+        setError(e?.message ?? 'Failed to initialize AI');
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
-    if (channel === 'ai') setAiMsgs((m) => [...m, msg]);
-    else setHumanMsgs((m) => [...m, msg]);
+  }, [ready]);
+
+  async function send() {
+    const text = draft.trim();
+    if (!text || !ready || generating) return;
+
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
     setDraft('');
-  };
+
+    const userMsg = await insertChatMessage(db, 'user', text);
+    const nextHistory: ChatMessage[] = [...messages.filter(isPersisted), userMsg];
+    setMessages(nextHistory);
+
+    RAGService.setContext(patient, nextHistory);
+
+    const pendingId = `pending-${Date.now()}`;
+    setPending({ id: pendingId, answer: '', thinking: '' });
+    setGenerating(true);
+
+    try {
+      const result = await RAGService.query(
+        text,
+        (t) => {
+          setPending((cur) => (cur ? { ...cur, thinking: cur.thinking + t } : cur));
+        },
+        (t) => {
+          setPending((cur) => (cur ? { ...cur, answer: cur.answer + t } : cur));
+        },
+      );
+      const assistantMsg = await insertChatMessage(
+        db,
+        'assistant',
+        result.answer,
+        result.thinking || null,
+      );
+      setMessages((prev) => [...prev.filter(isPersisted), assistantMsg]);
+      setPending(null);
+    } catch (e: any) {
+      const errMsg = `⚠️ Error: ${e?.message ?? 'unknown'}`;
+      const assistantMsg = await insertChatMessage(db, 'assistant', errMsg);
+      setMessages((prev) => [...prev.filter(isPersisted), assistantMsg]);
+      setPending(null);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function onClearHistory() {
+    await clearChatHistory(db);
+    setMessages([]);
+    setPending(null);
+  }
+
+  const listData: UiMessage[] = pending
+    ? [
+        ...messages,
+        {
+          id: pending.id,
+          role: 'assistant' as const,
+          content: pending.answer,
+          thinking: pending.thinking,
+          pending: true as const,
+          createdAt: Date.now(),
+        },
+      ]
+    : messages;
+
+  const statusText = (() => {
+    if (error) return `Error: ${error}`;
+    if (downloading) return `${downloadLabel}… ${Math.round(progress * 100)}%`;
+    if (loading) return 'Loading AI into memory…';
+    if (!ready) return 'Starting up…';
+    return null;
+  })();
 
   return (
     <ScreenBackdrop>
       <KeyboardAvoidingView
         style={[styles.flex, { paddingTop: insets.top }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Supervisor link</Text>
-          <View style={styles.segment}>
-            <Pressable
-              onPress={() => {
-                Haptics.selectionAsync();
-                setChannel('ai');
-              }}
-              style={[styles.segBtn, channel === 'ai' && styles.segOn]}
-            >
-              <Feather name="cpu" size={16} color={channel === 'ai' ? palette.white : palette.primary} />
-              <Text style={[styles.segTxt, channel === 'ai' && styles.segTxtOn]}>AI</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                Haptics.selectionAsync();
-                setChannel('human');
-              }}
-              style={[styles.segBtn, channel === 'human' && styles.segOn]}
-            >
-              <Feather name="users" size={16} color={channel === 'human' ? palette.white : palette.primary} />
-              <Text style={[styles.segTxt, channel === 'human' && styles.segTxtOn]}>Desk</Text>
-            </Pressable>
+          <View style={styles.headerRow}>
+            <Text style={styles.title}>Malaria Care AI</Text>
+            {messages.length > 0 ? (
+              <Pressable onPress={onClearHistory} style={styles.clearBtn}>
+                <Feather name="trash-2" size={16} color={palette.textSecondary} />
+                <Text style={styles.clearText}>Clear</Text>
+              </Pressable>
+            ) : null}
           </View>
           <Text style={styles.hint}>
-            {channel === 'ai'
-              ? 'Mock assistant — educational prompts only.'
-              : 'Mock district desk — not a live paging system.'}
+            Fully offline. Advice is tailored to the profile you saved during onboarding.
           </Text>
         </View>
 
+        {!patient?.onboardingCompletedAt && (
+          <View style={{ paddingHorizontal: space.padH, marginBottom: 10 }}>
+            <Banner
+              tone="warning"
+              title="Profile incomplete"
+              message="The AI can give general info but won't tailor dosing until you finish onboarding."
+            />
+          </View>
+        )}
+
+        {statusText ? (
+          <View style={styles.status}>
+            <Text style={styles.statusTxt}>{statusText}</Text>
+          </View>
+        ) : null}
+
         <FlatList
           ref={listRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
+          data={listData}
+          keyExtractor={(item) =>
+            isPersisted(item) ? String(item.id) : item.id
+          }
           style={styles.list}
           contentContainerStyle={{
             paddingHorizontal: space.padH,
@@ -93,20 +268,52 @@ export default function ChatScreen() {
             gap: 10,
           }}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+          ListEmptyComponent={
+            ready ? (
+              <EmptyState patientName={patient?.name ?? null} />
+            ) : null
+          }
           renderItem={({ item }) => {
-            const mine = item.from === 'user';
+            const mine = isPersisted(item) && item.role === 'user';
+            const isAssistant = item.role === 'assistant';
+            const streaming = !isPersisted(item);
             return (
               <View style={[styles.row, mine && styles.rowMine]}>
-                <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleOther]}>
-                  <Text style={[styles.bubbleText, { color: mine ? palette.white : palette.text }]}>{item.text}</Text>
-                  <Text
+                <View style={{ maxWidth: '88%' }}>
+                  {isAssistant && (item.thinking || (streaming && !item.content)) ? (
+                    <ThinkingBubble
+                      text={item.thinking ?? ''}
+                      streaming={streaming && !item.content}
+                    />
+                  ) : null}
+                  <View
                     style={[
-                      styles.time,
-                      { color: mine ? 'rgba(255,255,255,0.85)' : palette.textTertiary },
+                      styles.bubble,
+                      mine ? styles.bubbleMine : styles.bubbleOther,
                     ]}
                   >
-                    {item.time}
-                  </Text>
+                    {mine ? (
+                      <Text style={[styles.bubbleText, { color: palette.white }]}>
+                        {item.content}
+                      </Text>
+                    ) : (
+                      <Markdown style={mdStyles}>
+                        {item.content || (streaming ? '…' : '')}
+                      </Markdown>
+                    )}
+                    <Text
+                      style={[
+                        styles.time,
+                        {
+                          color: mine
+                            ? 'rgba(255,255,255,0.85)'
+                            : palette.textTertiary,
+                        },
+                      ]}
+                    >
+                      {formatTime(item.createdAt)}
+                    </Text>
+                  </View>
                 </View>
               </View>
             );
@@ -116,20 +323,29 @@ export default function ChatScreen() {
         <View style={[styles.composer, { paddingBottom: insets.bottom + 12 }]}>
           <TextInput
             style={styles.input}
-            placeholder={channel === 'ai' ? 'Ask triage assistant (mock)…' : 'Message district desk (mock)…'}
+            placeholder={
+              ready ? 'Ask about your symptoms, medicine, dose…' : 'Starting up…'
+            }
             placeholderTextColor={palette.textTertiary}
             value={draft}
             onChangeText={setDraft}
             multiline
+            editable={ready && !generating}
           />
           <Pressable
             onPress={send}
+            disabled={!ready || generating || draft.trim().length === 0}
             style={({ pressed }) => [
               styles.send,
-              pressFx && pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] },
+              (!ready || generating || draft.trim().length === 0) && { opacity: 0.4 },
+              pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] },
             ]}
           >
-            <Feather name="send" size={18} color={palette.white} />
+            {generating ? (
+              <ActivityIndicator color={palette.white} />
+            ) : (
+              <Feather name="send" size={18} color={palette.white} />
+            )}
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -137,40 +353,121 @@ export default function ChatScreen() {
   );
 }
 
+function EmptyState({ patientName }: { patientName: string | null }) {
+  return (
+    <View style={emptyStyles.wrap}>
+      <Feather name="message-circle" size={36} color={palette.primary} />
+      <Text style={emptyStyles.title}>
+        {patientName ? `Hi ${patientName},` : 'Hi,'}
+      </Text>
+      <Text style={emptyStyles.body}>
+        Ask about your symptoms, your medicine dose, or what to do next. I know your
+        profile — weight, age, pregnancy status, allergies — and will tailor advice to
+        you.
+      </Text>
+    </View>
+  );
+}
+
+const emptyStyles = StyleSheet.create({
+  wrap: {
+    alignItems: 'center',
+    gap: 10,
+    padding: 24,
+    marginHorizontal: 8,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  title: { fontFamily: fonts.semibold, fontSize: 18, color: palette.secondary },
+  body: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    color: palette.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+});
+
+function isPersisted(m: UiMessage): m is ChatMessage {
+  return (m as any).pending !== true;
+}
+
+function formatTime(ts: number): string {
+  return new Date(ts).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+const mdStyles = {
+  body: { fontFamily: fonts.regular, fontSize: 15, color: palette.text, lineHeight: 22 },
+  strong: { fontFamily: fonts.bold, color: palette.text },
+  em: { fontFamily: fonts.regular, fontStyle: 'italic' as const },
+  heading1: { fontFamily: fonts.bold, fontSize: 18, color: palette.secondary, marginVertical: 6 },
+  heading2: { fontFamily: fonts.bold, fontSize: 16, color: palette.secondary, marginVertical: 4 },
+  heading3: { fontFamily: fonts.semibold, fontSize: 15, color: palette.secondary, marginVertical: 4 },
+  bullet_list: { marginVertical: 4 },
+  ordered_list: { marginVertical: 4 },
+  list_item: { fontFamily: fonts.regular, fontSize: 15, color: palette.text },
+  code_inline: {
+    fontFamily: fonts.medium,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    padding: 2,
+    borderRadius: 4,
+  },
+};
+
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: 'transparent' },
   list: { flex: 1, backgroundColor: 'transparent' },
-  header: { paddingHorizontal: space.padH, paddingBottom: 12, gap: 10 },
-  title: { fontFamily: fonts.bold, fontSize: 28, color: palette.secondary },
-  segment: { flexDirection: 'row', gap: 10 },
-  segBtn: {
-    flex: 1,
+  header: { paddingHorizontal: space.padH, paddingBottom: 12, gap: 6 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  title: { fontFamily: fonts.bold, fontSize: 24, color: palette.secondary },
+  clearBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+  },
+  clearText: { fontFamily: fonts.medium, fontSize: 12, color: palette.textSecondary },
+  hint: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: palette.textSecondary,
+    lineHeight: 18,
+  },
+  status: {
+    marginHorizontal: space.padH,
+    marginBottom: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(13,148,136,0.10)',
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: glass.stroke,
-    backgroundColor: glass.fill,
+    borderColor: 'rgba(13,148,136,0.30)',
   },
-  segOn: { backgroundColor: palette.primary, borderColor: palette.primary },
-  segTxt: { fontFamily: fonts.semibold, fontSize: 14, color: palette.primary },
-  segTxtOn: { color: palette.white },
-  hint: { fontFamily: fonts.regular, fontSize: 12, color: palette.textSecondary, lineHeight: 18 },
+  statusTxt: {
+    fontFamily: fonts.medium,
+    fontSize: 13,
+    color: palette.secondary,
+    textAlign: 'center',
+  },
   row: { flexDirection: 'row', justifyContent: 'flex-start' },
   rowMine: { justifyContent: 'flex-end' },
   bubble: {
-    maxWidth: '88%',
+    maxWidth: '100%',
     padding: 14,
     borderRadius: radii.lg,
     borderWidth: 1,
   },
-  bubbleOther: {
-    borderColor: glass.stroke,
-    backgroundColor: glass.fillStrong,
-  },
+  bubbleOther: { borderColor: glass.stroke, backgroundColor: glass.fillStrong },
   bubbleMine: {
     borderColor: 'rgba(255,255,255,0.45)',
     backgroundColor: `${palette.primary}E8`,
@@ -190,7 +487,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     minHeight: 44,
-    maxHeight: 100,
+    maxHeight: 120,
     borderWidth: 1,
     borderColor: glass.stroke,
     borderRadius: radii.lg,

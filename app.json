@@ -4,24 +4,21 @@
     "slug": "DiseaseX",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hoangdang.diseasex",
+      "infoPlist": {
+        "NSCameraUsageDescription": "DiseaseX needs the camera so you can take photos of symptoms (e.g. eyes, urine colour) for the clinician to review.",
+        "NSPhotoLibraryUsageDescription": "DiseaseX uses your photo library so you can attach existing symptom photos to an assessment.",
+        "NSLocationWhenInUseUsageDescription": "DiseaseX uses your location one time during onboarding to know if you are in a malaria-endemic country (per WHO). It is never tracked in the background."
+      }
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.hoangdang.diseasex"
     },
     "plugins": [
       "expo-router",
@@ -29,9 +26,17 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow access to photos for recovery documentation."
+          "cameraPermission": "DiseaseX needs the camera so you can take photos of symptoms for the clinician to review.",
+          "photosPermission": "DiseaseX uses your photo library so you can attach existing symptom photos to an assessment."
         }
-      ]
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "DiseaseX uses your location once during onboarding to check if you are in a malaria-endemic country (per WHO)."
+        }
+      ],
+      "expo-sqlite"
     ]
   }
 }
