@@ -226,10 +226,12 @@ function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }
                     }`}
                   />
                   <ProfileRow
-                    icon="phone"
+                    icon="bell"
                     label="Clinician"
                     value={`${readable(patient.clinicianName)}${
-                      patient.clinicianPhone ? ` · ${patient.clinicianPhone}` : ''
+                      patient.clinicianAlertTopic
+                        ? ` · ntfy/${patient.clinicianAlertTopic}`
+                        : ''
                     }`}
                   />
                   {patient.allergies.length > 0 && (

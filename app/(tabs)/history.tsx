@@ -40,9 +40,9 @@ export default function HistoryScreen() {
   const tNo = useT('no');
   const tDaysAgoSuffix = useT('d ago');
   const tNoAssessments = useT('No assessments yet.');
-  const tSmsSentTo = useT('SMS sent to');
-  const tSmsFailed = useT('SMS failed:');
-  const tSmsSkipped = useT('SMS skipped: Twilio not configured');
+  const tAlertSentTo = useT('Alert pushed to');
+  const tAlertFailed = useT('Alert failed:');
+  const tAlertSkipped = useT('Alert skipped — provider not configured');
   const tCooldown = useT('Cooldown — clinician already alerted recently');
   const tUnknown = useT('unknown');
   const [assessments, setAssessments] = useState<Assessment[]>([]);
@@ -229,11 +229,11 @@ export default function HistoryScreen() {
                         />
                         <Text style={styles.escText}>
                           {e.status === 'sent'
-                            ? `${tSmsSentTo} ${e.clinicianPhone}`
+                            ? `${tAlertSentTo} ${e.clinicianAlertTopic}`
                             : e.status === 'failed'
-                              ? `${tSmsFailed} ${e.errorMessage ?? tUnknown}`
+                              ? `${tAlertFailed} ${e.errorMessage ?? tUnknown}`
                               : e.status === 'disabled'
-                                ? tSmsSkipped
+                                ? tAlertSkipped
                                 : tCooldown}
                         </Text>
                       </View>

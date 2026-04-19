@@ -28,6 +28,11 @@ import { T } from '../i18n/T';
 import { useLanguage, useT } from '../i18n/LanguageContext';
 import { LANGUAGES } from '../i18n/languages';
 import { captureLocation, type GeoResult } from '../services/geoService';
+import {
+  generateRandomTopic,
+  isValidTopic,
+  subscribeUrlFor,
+} from '../services/ntfyClient';
 
 const STEP_COUNT = 5;
 
@@ -49,7 +54,7 @@ type Form = {
   readingLevel: ReadingLevel | null;
   patientPhone: string;
   clinicianName: string;
-  clinicianPhone: string;
+  clinicianAlertTopic: string;
   clinicianEmail: string;
 };
 
@@ -71,7 +76,7 @@ const emptyForm: Form = {
   readingLevel: 'basic',
   patientPhone: '',
   clinicianName: '',
-  clinicianPhone: '',
+  clinicianAlertTopic: '',
   clinicianEmail: '',
 };
 
@@ -146,7 +151,7 @@ export default function WelcomeScreen() {
         readingLevel: existing.readingLevel,
         patientPhone: existing.patientPhone ?? '',
         clinicianName: existing.clinicianName ?? '',
-        clinicianPhone: existing.clinicianPhone ?? '',
+        clinicianAlertTopic: existing.clinicianAlertTopic ?? '',
         clinicianEmail: existing.clinicianEmail ?? '',
       });
     })();
@@ -231,7 +236,7 @@ export default function WelcomeScreen() {
         readingLevel: form.readingLevel,
         patientPhone: form.patientPhone.trim() || null,
         clinicianName: form.clinicianName.trim() || null,
-        clinicianPhone: form.clinicianPhone.trim() || null,
+        clinicianAlertTopic: form.clinicianAlertTopic.trim() || null,
         clinicianEmail: form.clinicianEmail.trim() || null,
       });
       await markOnboarded(db);
@@ -355,7 +360,7 @@ function stepIsValid(step: number, f: Form): boolean {
     case 4:
       return (
         f.clinicianName.trim().length > 0 &&
-        f.clinicianPhone.trim().length > 0
+        isValidTopic(f.clinicianAlertTopic.trim())
       );
     default:
       return false;
@@ -788,12 +793,37 @@ function StepClinician({
 }) {
   const tEmergencyTitle = useT('Emergency contact');
   const tEmergencyMsg = useT(
-    'If you report severe symptoms, DiseaseX will automatically text your clinician with the key details. Please use a number that receives SMS.',
+    "If you report severe symptoms, DiseaseX will push an urgent alert to your clinician via ntfy.sh. They need to install the free ntfy app (iOS / Android) and subscribe to the topic below — no SIM, phone number, or account required.",
   );
   const tClinName = useT('Clinician / PCP name');
-  const tClinPhone = useT('Clinician phone (with country code)');
+  const tAlertTopic = useT('Alert topic (shared secret)');
+  const tTopicHelp = useT(
+    "This acts as a password. Pick one that isn't easy to guess, or tap Generate.",
+  );
+  const tGenerate = useT('Generate');
+  const tHowToShare = useT('How to share with your clinician');
+  const tShareStep1 = useT(
+    'Ask them to install the free ntfy app (iOS / Android).',
+  );
+  const tShareStep2 = useT(
+    "In the app tap + → Add subscription, paste ONLY the topic name below into the 'Topic' field (not the full URL), leave the server as the default (ntfy.sh), then tap Subscribe.",
+  );
+  const tShareStep3 = useT(
+    'Or, they can open the Full URL in any browser to watch alerts live.',
+  );
+  const tTopicLabel = useT('Topic (paste this into the ntfy app)');
+  const tFullUrlLabel = useT('Full URL (for browser only)');
+  const tTopicInvalid = useT(
+    'Use 1–64 letters, numbers, hyphens, or underscores.',
+  );
   const tClinEmail = useT('Clinician email (optional)');
   const phClinName = useT('e.g. Dr. Otieno');
+  const phTopic = useT('e.g. diseasex-amina-9f3c1');
+
+  const topic = form.clinicianAlertTopic.trim();
+  const topicValid = topic.length === 0 || isValidTopic(topic);
+  const showShareCard = topic.length > 0 && topicValid;
+
   return (
     <View style={{ gap: 12 }}>
       <Banner tone="warning" title={tEmergencyTitle} message={tEmergencyMsg} />
@@ -808,16 +838,66 @@ function StepClinician({
               placeholderTextColor={palette.textTertiary}
             />
           </Field>
-          <Field label={tClinPhone}>
-            <TextInput
-              value={form.clinicianPhone}
-              onChangeText={(t) => update('clinicianPhone', t)}
-              style={styles.input}
-              keyboardType="phone-pad"
-              placeholder="+254700123456"
-              placeholderTextColor={palette.textTertiary}
-            />
+
+          <Field label={tAlertTopic}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TextInput
+                value={form.clinicianAlertTopic}
+                onChangeText={(t) =>
+                  update(
+                    'clinicianAlertTopic',
+                    t.replace(/[^A-Za-z0-9_-]/g, ''),
+                  )
+                }
+                style={[styles.input, { flex: 1 }]}
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder={phTopic}
+                placeholderTextColor={palette.textTertiary}
+              />
+              <Pressable
+                onPress={() => update('clinicianAlertTopic', generateRandomTopic())}
+                style={styles.secondaryBtn}
+              >
+                <Feather name="refresh-cw" size={14} color={palette.primary} />
+                <Text style={styles.secondaryBtnText}>{tGenerate}</Text>
+              </Pressable>
+            </View>
+            {!topicValid ? (
+              <Text style={styles.helpError}>{tTopicInvalid}</Text>
+            ) : (
+              <Text style={styles.helpText}>{tTopicHelp}</Text>
+            )}
           </Field>
+
+          {showShareCard ? (
+            <View style={styles.shareCard}>
+              <View style={styles.shareHeader}>
+                <Feather name="share-2" size={14} color={palette.primary} />
+                <Text style={styles.shareTitle}>{tHowToShare}</Text>
+              </View>
+
+              <View style={styles.shareStepsList}>
+                <ShareStep n={1} text={tShareStep1} />
+                <ShareStep n={2} text={tShareStep2} />
+                <ShareStep n={3} text={tShareStep3} />
+              </View>
+
+              <View style={styles.urlBlock}>
+                <Text style={styles.urlLabel}>{tTopicLabel}</Text>
+                <Text style={styles.urlValue} selectable>
+                  {topic}
+                </Text>
+              </View>
+              <View style={[styles.urlBlock, { marginTop: 6 }]}>
+                <Text style={styles.urlLabel}>{tFullUrlLabel}</Text>
+                <Text style={styles.urlValueMuted} selectable>
+                  {subscribeUrlFor(topic)}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
           <Field label={tClinEmail}>
             <TextInput
               value={form.clinicianEmail}
@@ -831,6 +911,17 @@ function StepClinician({
           </Field>
         </View>
       </GlassCard>
+    </View>
+  );
+}
+
+function ShareStep({ n, text }: { n: number; text: string }) {
+  return (
+    <View style={styles.shareStepRow}>
+      <View style={styles.shareStepDot}>
+        <Text style={styles.shareStepDotText}>{n}</Text>
+      </View>
+      <Text style={styles.shareStepText}>{text}</Text>
     </View>
   );
 }
@@ -1044,4 +1135,90 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   ctaText: { fontFamily: fonts.semibold, fontSize: 16, color: palette.white },
+
+  helpText: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: palette.textTertiary,
+    marginTop: 6,
+    lineHeight: 16,
+  },
+  helpError: {
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    color: palette.statusAlert,
+    marginTop: 6,
+  },
+  urlBlock: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: 'rgba(37,99,235,0.06)',
+    gap: 2,
+  },
+  urlLabel: {
+    fontFamily: fonts.medium,
+    fontSize: 10,
+    color: palette.textTertiary,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  urlValue: {
+    fontFamily: fonts.semibold,
+    fontSize: 14,
+    color: palette.primary,
+  },
+  urlValueMuted: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: palette.textSecondary,
+  },
+  shareCard: {
+    padding: 14,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: 'rgba(37,99,235,0.04)',
+    gap: 10,
+  },
+  shareHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  shareTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: 13,
+    color: palette.primary,
+    letterSpacing: 0.2,
+  },
+  shareStepsList: { gap: 8 },
+  shareStepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  shareStepDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: palette.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  shareStepDotText: {
+    fontFamily: fonts.bold,
+    fontSize: 11,
+    color: palette.white,
+  },
+  shareStepText: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: palette.textSecondary,
+    lineHeight: 19,
+  },
 });

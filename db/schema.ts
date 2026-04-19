@@ -6,7 +6,7 @@
  * and append an if-block when evolving the schema.
  */
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /** DDL for a fresh database (always rebuilt from the latest schema). */
 export const SCHEMA_SQL = `
@@ -37,8 +37,9 @@ CREATE TABLE IF NOT EXISTS patient (
   reading_level TEXT,
   patient_phone TEXT,
   clinician_name TEXT,
-  clinician_phone TEXT,
+  clinician_phone TEXT,           -- legacy (Twilio era), unused as of v3
   clinician_email TEXT,
+  clinician_alert_topic TEXT,     -- ntfy.sh topic for push alerts (v3+)
   onboarding_completed_at INTEGER,
   updated_at INTEGER NOT NULL
 );
@@ -73,6 +74,11 @@ CREATE TABLE IF NOT EXISTS assessment_photo (
 );
 CREATE INDEX IF NOT EXISTS idx_photo_assessment ON assessment_photo(assessment_id);
 
+-- The escalation table carries both legacy Twilio rows (v1/v2) and new ntfy
+-- rows (v3+). To avoid a risky table rebuild we kept the original column
+-- names: the 'clinician_phone' column now stores the ntfy topic string for
+-- new rows (it's just a contact-string), and 'twilio_sid' stays for legacy
+-- data. New code writes to provider_message_id and reads either column.
 CREATE TABLE IF NOT EXISTS escalation (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   assessment_id INTEGER NOT NULL REFERENCES assessment(id) ON DELETE CASCADE,
@@ -81,6 +87,7 @@ CREATE TABLE IF NOT EXISTS escalation (
   sms_body TEXT NOT NULL,
   clinician_phone TEXT NOT NULL,
   twilio_sid TEXT,
+  provider_message_id TEXT,
   status TEXT NOT NULL,
   error_message TEXT
 );
@@ -137,5 +144,14 @@ export const MIGRATIONS: Record<number, string> = {
       notes TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_smear_created ON smear(created_at DESC);
+  `,
+  // v3: replace Twilio SMS escalation with ntfy.sh push alerts. The patient
+  // row gains a dedicated topic column; the escalation table keeps its
+  // existing 'clinician_phone' string column (used as the "where sent"
+  // label) and just adds a nullable provider_message_id for the ntfy id.
+  // Legacy 'twilio_sid' values keep rendering in history unchanged.
+  3: `
+    ALTER TABLE patient ADD COLUMN clinician_alert_topic TEXT;
+    ALTER TABLE escalation ADD COLUMN provider_message_id TEXT;
   `,
 };

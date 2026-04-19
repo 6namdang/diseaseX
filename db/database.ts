@@ -1,18 +1,16 @@
 /**
  * expo-sqlite bootstrapping. The DB is opened via SQLiteProvider at
- * `app/_layout.tsx` using {@link initDatabase} as onInit. A migrate-and-wipe
- * one-shot runs on first open to drop any legacy JSON profile/history files
- * left behind by the pre-SQLite RAGService (per user spec: wipe on migrate).
+ * `app/_layout.tsx` using {@link initDatabase} as onInit.
+ *
+ * This module is intentionally free of any non-Expo native module imports so
+ * the root layout can load cleanly under the Expo Go client (which does not
+ * bundle custom native modules like llama.rn or react-native-fs). Persistent
+ * state for the app lives entirely in SQLite; pre-SQLite JSON artifacts, if
+ * any existed, are left alone on disk (they are unreferenced and harmless).
  */
 
 import type { SQLiteDatabase } from 'expo-sqlite';
-import RNFS from 'react-native-fs';
 import { MIGRATIONS, SCHEMA_SQL, SCHEMA_VERSION } from './schema';
-
-const LEGACY_FILES = [
-  `${RNFS.DocumentDirectoryPath}/user_profile.json`,
-  `${RNFS.DocumentDirectoryPath}/chat_history.json`,
-];
 
 export const DATABASE_NAME = 'diseasex.db';
 
@@ -25,7 +23,6 @@ export async function initDatabase(db: SQLiteDatabase): Promise<void> {
   if (version === 0) {
     await db.execAsync(SCHEMA_SQL);
     await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
-    await wipeLegacyFiles();
     return;
   }
 
@@ -37,18 +34,6 @@ export async function initDatabase(db: SQLiteDatabase): Promise<void> {
   if (version < SCHEMA_VERSION) {
     await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   }
-}
-
-async function wipeLegacyFiles(): Promise<void> {
-  await Promise.all(
-    LEGACY_FILES.map(async (p) => {
-      try {
-        if (await RNFS.exists(p)) await RNFS.unlink(p);
-      } catch {
-        // best-effort cleanup only
-      }
-    }),
-  );
 }
 
 /**

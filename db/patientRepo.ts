@@ -46,8 +46,8 @@ function rowToPatient(r: PatientRow): Patient {
     readingLevel: r.reading_level,
     patientPhone: r.patient_phone,
     clinicianName: r.clinician_name,
-    clinicianPhone: r.clinician_phone,
     clinicianEmail: r.clinician_email,
+    clinicianAlertTopic: r.clinician_alert_topic,
     onboardingCompletedAt: r.onboarding_completed_at,
     updatedAt: r.updated_at,
   };
@@ -86,7 +86,7 @@ export async function upsertPatient(
       allergies, current_medications, chronic_conditions, prior_malaria_episodes,
       country_code, country_name, region, latitude, longitude, endemicity,
       preferred_language, reading_level,
-      patient_phone, clinician_name, clinician_phone, clinician_email,
+      patient_phone, clinician_name, clinician_email, clinician_alert_topic,
       onboarding_completed_at, updated_at
     ) VALUES (
       1, ?, ?, ?, ?, ?,
@@ -110,8 +110,9 @@ export async function upsertPatient(
       endemicity=excluded.endemicity,
       preferred_language=excluded.preferred_language, reading_level=excluded.reading_level,
       patient_phone=excluded.patient_phone,
-      clinician_name=excluded.clinician_name, clinician_phone=excluded.clinician_phone,
+      clinician_name=excluded.clinician_name,
       clinician_email=excluded.clinician_email,
+      clinician_alert_topic=excluded.clinician_alert_topic,
       onboarding_completed_at=excluded.onboarding_completed_at,
       updated_at=excluded.updated_at`,
     [
@@ -137,8 +138,8 @@ export async function upsertPatient(
       merged.readingLevel,
       merged.patientPhone,
       merged.clinicianName,
-      merged.clinicianPhone,
       merged.clinicianEmail,
+      merged.clinicianAlertTopic,
       merged.onboardingCompletedAt,
       merged.updatedAt,
     ],
@@ -186,8 +187,8 @@ function emptyPatient(): Patient {
     readingLevel: null,
     patientPhone: null,
     clinicianName: null,
-    clinicianPhone: null,
     clinicianEmail: null,
+    clinicianAlertTopic: null,
     onboardingCompletedAt: null,
     updatedAt: 0,
   };

@@ -17,7 +17,6 @@ import { useContentInsets } from '../../hooks/useContentInsets';
 import { usePatient } from '../../hooks/usePatient';
 import { T } from '../../i18n/T';
 import { useT } from '../../i18n/LanguageContext';
-import { isConfigured as twilioConfigured } from '../../services/twilioClient';
 
 export default function HomeScreen() {
   const insets = useContentInsets();
@@ -48,9 +47,9 @@ export default function HomeScreen() {
   const unknownEndemicLabel = useT('Endemicity unknown');
   const noChangeLabel = useT('no change');
   const vsLastLabel = useT('vs last');
-  const tSmsNotConfiguredTitle = useT('SMS escalation not configured');
-  const tSmsNotConfiguredMsg = useT(
-    'Set EXPO_PUBLIC_TWILIO_* env vars and rebuild the app so clinician alerts can be sent.',
+  const tNoTopicTitle = useT('Clinician alert topic not set');
+  const tNoTopicMsg = useT(
+    'Finish onboarding and add an ntfy.sh alert topic so urgent push alerts can reach your clinician.',
   );
   const tRedFlagsTitle = useT('Your latest assessment has red flags');
   const tRedFlagsMsg = useT(
@@ -111,11 +110,11 @@ export default function HomeScreen() {
           <SettingsSheet />
         </View>
 
-        {!twilioConfigured() && (
+        {patient?.onboardingCompletedAt && !patient?.clinicianAlertTopic && (
           <Banner
             tone="warning"
-            title={tSmsNotConfiguredTitle}
-            message={tSmsNotConfiguredMsg}
+            title={tNoTopicTitle}
+            message={tNoTopicMsg}
           />
         )}
 
@@ -205,7 +204,7 @@ export default function HomeScreen() {
             <GlassCard>
               <Text style={styles.cardTitle}><T>Red flags reported</T></Text>
               <Text style={styles.cardBody}>
-                <T>Count across all assessments. Any flag triggers an SMS to your clinician.</T>
+                <T>Count across all assessments. Any flag pushes an urgent alert to your clinician.</T>
               </Text>
               <View style={styles.flagGrid}>
                 {RED_FLAG_KEYS.map((k) => (

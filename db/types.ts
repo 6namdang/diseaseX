@@ -43,8 +43,9 @@ export type PatientRow = {
   reading_level: ReadingLevel | null;
   patient_phone: string | null;
   clinician_name: string | null;
-  clinician_phone: string | null;
   clinician_email: string | null;
+  /** ntfy.sh topic the clinician subscribes to for push alerts (v3+). */
+  clinician_alert_topic: string | null;
   onboarding_completed_at: number | null;
   updated_at: number;
 };
@@ -73,8 +74,9 @@ export type Patient = {
   readingLevel: ReadingLevel | null;
   patientPhone: string | null;
   clinicianName: string | null;
-  clinicianPhone: string | null;
   clinicianEmail: string | null;
+  /** ntfy.sh topic the clinician subscribes to for push alerts (v3+). */
+  clinicianAlertTopic: string | null;
   onboardingCompletedAt: number | null;
   updatedAt: number;
 };
@@ -130,6 +132,18 @@ export type AssessmentPhoto = {
   createdAt: number;
 };
 
+/**
+ * Escalation delivery status.
+ *  - 'sent':            push accepted by the alert provider (ntfy.sh)
+ *  - 'failed':          network / HTTP error talking to the provider
+ *  - 'disabled':        legacy rows from the Twilio era (no provider
+ *                       credentials). New code never emits this.
+ *  - 'skipped_cooldown': legacy — before v4 an escalation could be throttled
+ *                       if red flags were unchanged within 6h. New code
+ *                       never emits this; every red-flag assessment sends
+ *                       immediately. Preserved in the union so existing DB
+ *                       rows still parse.
+ */
 export type EscalationStatus = 'sent' | 'failed' | 'disabled' | 'skipped_cooldown';
 
 export type EscalationRow = {
@@ -137,9 +151,19 @@ export type EscalationRow = {
   assessment_id: number;
   created_at: number;
   red_flags: string;
+  /** Push message body. Column name kept from the SMS era. */
   sms_body: string;
+  /**
+   * Contact string the alert was addressed to. In the Twilio era this held
+   * an E.164 phone number; in the ntfy era it holds the topic name. Kept
+   * as 'clinician_phone' at the SQL level to avoid a risky table rebuild;
+   * the domain type exposes it as `clinicianAlertTopic`.
+   */
   clinician_phone: string;
+  /** Legacy Twilio message SID. Null on all v3+ rows. */
   twilio_sid: string | null;
+  /** ntfy.sh response id for successful publishes (v3+). */
+  provider_message_id: string | null;
   status: EscalationStatus;
   error_message: string | null;
 };
@@ -149,9 +173,12 @@ export type Escalation = {
   assessmentId: number;
   createdAt: number;
   redFlags: RedFlagKey[];
-  smsBody: string;
-  clinicianPhone: string;
-  twilioSid: string | null;
+  /** Full message body that was pushed. */
+  messageBody: string;
+  /** ntfy topic (or, for legacy rows, the phone number) the alert was sent to. */
+  clinicianAlertTopic: string;
+  /** Provider message id. ntfy id for v3+ rows, Twilio SID for legacy rows. */
+  providerMessageId: string | null;
   status: EscalationStatus;
   errorMessage: string | null;
 };

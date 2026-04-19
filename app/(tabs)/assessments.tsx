@@ -326,8 +326,8 @@ export default function AssessmentsScreen() {
             <Text style={styles.h1}><T>How are you feeling today?</T></Text>
             <Text style={styles.sub}>
               <T>
-                Takes about a minute. Be honest — this drives the advice and whether your
-                clinician is alerted.
+                Takes about a minute. Be honest — this drives the advice and whether
+                your clinician is alerted.
               </T>
             </Text>
           </View>
@@ -415,7 +415,7 @@ export default function AssessmentsScreen() {
           <GlassCard>
             <Text style={styles.cardH}><T>Red flags — safety check</T></Text>
             <Text style={styles.sub}>
-              <T>Any "Yes" below will immediately text your clinician.</T>
+              <T>Any "Yes" below will immediately push an urgent alert to your clinician.</T>
             </Text>
             <View style={{ gap: 10, marginTop: 8 }}>
               {RED_FLAG_KEYS.map((k) => (
@@ -441,7 +441,7 @@ export default function AssessmentsScreen() {
           <GlassCard>
             <Text style={styles.cardH}><T>Photos (optional)</T></Text>
             <Text style={styles.sub}>
-              <T>Photos stay on your device. They are not sent in escalation SMS (text only).</T>
+              <T>Photos stay on your device. They are not attached to the push alert (text only).</T>
             </Text>
             <View style={{ gap: 10, marginTop: 10 }}>
               {photoSlotTags.map((tag) => {
@@ -543,20 +543,16 @@ function ResultScreen({
   const tAssessmentSaved = useT('Assessment saved');
   const tNoRedFlags = useT('No red flags — no alert was sent.');
   const tNoClinician = useT(
-    'Red flags detected but no clinician phone on file. Please update your contacts.',
+    'Red flags detected but no clinician alert topic is configured. Open Settings → Edit profile to add one.',
   );
-  const tCooldown = useT(
-    'Red flags present, but your clinician was recently alerted about the same issues (6h cooldown).',
-  );
-  const tClinicianAlerted = useT('Clinician alerted by SMS');
-  const tSmsSentPrefix = useT('An SMS was sent to your clinician');
-  const tSmsFailedTitle = useT('SMS alert FAILED');
-  const tSmsFailedPrefix = useT('Could not text your clinician');
-  const tSmsCallDirectly = useT('Please call them directly.');
-  const tSmsDisabledTitle = useT('SMS alert disabled');
-  const tSmsDisabled = useT(
-    'Red flags detected, but SMS is not configured. Please call your clinician directly.',
-  );
+  const tClinicianAlerted = useT('Clinician alerted');
+  const tAlertSentPrefix = useT('An urgent push was sent to your clinician');
+  const tPhotosAttached = useT('photos attached');
+  const tPhotoAttached = useT('photo attached');
+  const tPhotosFailedSuffix = useT('failed to upload');
+  const tAlertFailedTitle = useT('Alert FAILED');
+  const tAlertFailedPrefix = useT('Could not reach your clinician');
+  const tAlertCallDirectly = useT('Please contact them another way.');
   const tSeverityScore = useT('Severity score:');
   const tImproving = useT('improving');
   const tWorsening = useT('worsening');
@@ -576,24 +572,25 @@ function ResultScreen({
       tone = 'warning';
       message = tNoClinician;
       break;
-    case 'cooldown':
-      tone = 'warning';
-      message = tCooldown;
-      break;
-    case 'sent':
+    case 'sent': {
       tone = 'danger';
       title = tClinicianAlerted;
-      message = `${tSmsSentPrefix} (Twilio id ${outcome.twilioSid.slice(0, 10)}…).`;
+      const idSuffix = `(ntfy id ${outcome.messageId.slice(0, 10)}…)`;
+      const parts: string[] = [`${tAlertSentPrefix} ${idSuffix}.`];
+      if (outcome.photosAttached > 0) {
+        const word = outcome.photosAttached === 1 ? tPhotoAttached : tPhotosAttached;
+        parts.push(`${outcome.photosAttached} ${word}.`);
+      }
+      if (outcome.photosFailed > 0) {
+        parts.push(`${outcome.photosFailed} ${tPhotosFailedSuffix}.`);
+      }
+      message = parts.join(' ');
       break;
+    }
     case 'failed':
       tone = 'danger';
-      title = tSmsFailedTitle;
-      message = `${tSmsFailedPrefix}: ${outcome.error}. ${tSmsCallDirectly}`;
-      break;
-    case 'disabled':
-      tone = 'danger';
-      title = tSmsDisabledTitle;
-      message = tSmsDisabled;
+      title = tAlertFailedTitle;
+      message = `${tAlertFailedPrefix}: ${outcome.error}. ${tAlertCallDirectly}`;
       break;
   }
 
@@ -610,9 +607,9 @@ function ResultScreen({
         <View style={{ alignItems: 'center', gap: 10 }}>
           <Feather
             name={
-              outcome.kind === 'sent' || outcome.kind === 'failed' || outcome.kind === 'disabled'
+              outcome.kind === 'sent' || outcome.kind === 'failed'
                 ? 'alert-octagon'
-                : outcome.kind === 'cooldown' || outcome.kind === 'no_clinician'
+                : outcome.kind === 'no_clinician'
                   ? 'alert-triangle'
                   : 'check-circle'
             }
