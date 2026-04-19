@@ -173,3 +173,35 @@ export type ChatMessage = {
   content: string;
   thinking: string | null;
 };
+
+/** Blood-smear analysis result persisted after inference. */
+export type SmearSpecies = 'none' | 'pf' | 'pv' | 'po' | 'pm' | 'mixed';
+export type SmearBand = 'negative' | 'low' | 'moderate' | 'high';
+
+export type SmearRow = {
+  id: number;
+  created_at: number;
+  photo_uri: string;
+  species: SmearSpecies;
+  parasitemia_pct: number;
+  confidence: number;
+  band: SmearBand;
+  recommendation: string;
+  model_id: string;
+  duration_ms: number | null;
+  notes: string | null;
+};
+
+export type Smear = {
+  id: number;
+  createdAt: number;
+  photoUri: string;
+  species: SmearSpecies;
+  parasitemiaPct: number;
+  confidence: number;
+  band: SmearBand;
+  recommendation: string;
+  modelId: string;
+  durationMs: number | null;
+  notes: string | null;
+};

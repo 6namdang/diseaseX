@@ -52,10 +52,12 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="history"
+        name="smear"
         options={{
-          title: 'History',
-          tabBarIcon: ({ color, size }) => <Feather name="list" size={size} color={color} />,
+          title: 'Smear',
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="droplet" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
@@ -65,6 +67,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <Feather name="message-circle" size={size} color={color} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="history"
+        options={{
+          title: 'History',
+          tabBarIcon: ({ color, size }) => <Feather name="list" size={size} color={color} />,
         }}
       />
     </Tabs>

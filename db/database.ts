@@ -7,7 +7,7 @@
 
 import type { SQLiteDatabase } from 'expo-sqlite';
 import RNFS from 'react-native-fs';
-import { SCHEMA_SQL, SCHEMA_VERSION } from './schema';
+import { MIGRATIONS, SCHEMA_SQL, SCHEMA_VERSION } from './schema';
 
 const LEGACY_FILES = [
   `${RNFS.DocumentDirectoryPath}/user_profile.json`,
@@ -29,9 +29,12 @@ export async function initDatabase(db: SQLiteDatabase): Promise<void> {
     return;
   }
 
-  // Future migrations append here: if (version < 2) { ... }
+  // Replay any missing migration blocks, in order.
+  for (let v = version + 1; v <= SCHEMA_VERSION; v++) {
+    const sql = MIGRATIONS[v];
+    if (sql) await db.execAsync(sql);
+  }
   if (version < SCHEMA_VERSION) {
-    // Single schema version today — just bump.
     await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   }
 }
@@ -46,4 +49,21 @@ async function wipeLegacyFiles(): Promise<void> {
       }
     }),
   );
+}
+
+/**
+ * Wipe all user-owned rows so the app returns to the welcome flow. Schema
+ * and pragmas are preserved; only data is removed.
+ */
+export async function wipeAllData(db: SQLiteDatabase): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await db.execAsync(`
+      DELETE FROM assessment_photo;
+      DELETE FROM assessment;
+      DELETE FROM escalation;
+      DELETE FROM chat_message;
+      DELETE FROM smear;
+      DELETE FROM patient;
+    `);
+  });
 }

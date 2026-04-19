@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -21,9 +21,11 @@ import { Banner } from '../components/ui/Banner';
 import { GlassCard } from '../components/ui/GlassCard';
 import { ScreenBackdrop } from '../components/ui/ScreenBackdrop';
 import { fonts, palette, radii, shadow, space } from '../constants/designTokens';
-import { markOnboarded, upsertPatient } from '../db/patientRepo';
+import { getPatient, markOnboarded, upsertPatient } from '../db/patientRepo';
 import type { ReadingLevel, Sex } from '../db/types';
 import { useContentInsets } from '../hooks/useContentInsets';
+import { useLanguage } from '../i18n/LanguageContext';
+import { LANGUAGES } from '../i18n/languages';
 import { captureLocation, type GeoResult } from '../services/geoService';
 
 const STEP_COUNT = 5;
@@ -64,7 +66,7 @@ const emptyForm: Form = {
   chronicConditions: '',
   priorMalariaEpisodes: '',
   location: null,
-  preferredLanguage: 'English',
+  preferredLanguage: 'en',
   readingLevel: 'basic',
   patientPhone: '',
   clinicianName: '',
@@ -75,14 +77,66 @@ const emptyForm: Form = {
 export default function WelcomeScreen() {
   const insets = useContentInsets();
   const db = useSQLiteContext();
+  const { lang, setLanguage } = useLanguage();
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState<Form>(emptyForm);
+  const [form, setForm] = useState<Form>({ ...emptyForm, preferredLanguage: lang });
   const [locLoading, setLocLoading] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Pre-fill from existing DB row so Settings → Edit profile acts as an edit,
+  // not an overwrite. Only runs once on mount; new installs just see emptyForm.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const existing = await getPatient(db);
+      if (cancelled || !existing) return;
+      setForm({
+        name: existing.name ?? '',
+        age: existing.age != null ? String(existing.age) : '',
+        sex: existing.sex,
+        weightKg: existing.weightKg != null ? String(existing.weightKg) : '',
+        heightCm: existing.heightCm != null ? String(existing.heightCm) : '',
+        isPregnant: existing.isPregnant,
+        pregnancyTrimester: existing.pregnancyTrimester,
+        isBreastfeeding: existing.isBreastfeeding,
+        allergies: existing.allergies.join(', '),
+        currentMedications: existing.currentMedications.join(', '),
+        chronicConditions: existing.chronicConditions.join(', '),
+        priorMalariaEpisodes:
+          existing.priorMalariaEpisodes != null ? String(existing.priorMalariaEpisodes) : '',
+        location:
+          existing.latitude != null && existing.longitude != null
+            ? {
+                countryCode: existing.countryCode,
+                countryName: existing.countryName,
+                region: existing.region,
+                latitude: existing.latitude,
+                longitude: existing.longitude,
+                endemicity: existing.endemicity ?? 'unknown',
+              }
+            : null,
+        preferredLanguage: existing.preferredLanguage ?? lang,
+        readingLevel: existing.readingLevel,
+        patientPhone: existing.patientPhone ?? '',
+        clinicianName: existing.clinicianName ?? '',
+        clinicianPhone: existing.clinicianPhone ?? '',
+        clinicianEmail: existing.clinicianEmail ?? '',
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const update = <K extends keyof Form>(key: K, value: Form[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
+
+  const onPickLanguage = async (code: string) => {
+    update('preferredLanguage', code);
+    await setLanguage(code);
+  };
 
   const canContinue = useMemo(() => stepIsValid(step, form), [step, form]);
 
@@ -200,7 +254,9 @@ export default function WelcomeScreen() {
               error={locError}
             />
           )}
-          {step === 3 && <StepPrefs form={form} update={update} />}
+          {step === 3 && (
+            <StepPrefs form={form} update={update} onPickLanguage={onPickLanguage} />
+          )}
           {step === 4 && <StepClinician form={form} update={update} />}
         </ScrollView>
 
@@ -594,21 +650,26 @@ function StepLocation({
 function StepPrefs({
   form,
   update,
+  onPickLanguage,
 }: {
   form: Form;
   update: <K extends keyof Form>(k: K, v: Form[K]) => void;
+  onPickLanguage: (code: string) => void;
 }) {
   return (
     <GlassCard>
       <View style={styles.fieldStack}>
-        <Field label="Preferred language for advice">
-          <TextInput
-            value={form.preferredLanguage}
-            onChangeText={(t) => update('preferredLanguage', t)}
-            style={styles.input}
-            placeholder="e.g. English"
-            placeholderTextColor={palette.textTertiary}
-          />
+        <Field label="Preferred language (UI + advice)">
+          <View style={styles.row}>
+            {LANGUAGES.map((l) => (
+              <Choice
+                key={l.code}
+                label={l.native}
+                selected={form.preferredLanguage === l.code}
+                onPress={() => onPickLanguage(l.code)}
+              />
+            ))}
+          </View>
         </Field>
         <Field label="Reading level">
           <Row>

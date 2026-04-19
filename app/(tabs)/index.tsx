@@ -8,6 +8,7 @@ import { LineChart } from '../../components/charts/LineChart';
 import { Banner } from '../../components/ui/Banner';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { ScreenBackdrop } from '../../components/ui/ScreenBackdrop';
+import { SettingsSheet } from '../../components/ui/SettingsSheet';
 import { fonts, palette, radii, space } from '../../constants/designTokens';
 import { RED_FLAG_KEYS } from '../../db/assessmentRepo';
 import type { RedFlagKey } from '../../db/types';
@@ -76,6 +77,7 @@ export default function HomeScreen() {
                   : 'Endemicity unknown'}
             </Text>
           </View>
+          <SettingsSheet />
         </View>
 
         {!twilioConfigured() && (

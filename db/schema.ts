@@ -6,9 +6,9 @@
  * and append an if-block when evolving the schema.
  */
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
-/** DDL for a fresh database. */
+/** DDL for a fresh database (always rebuilt from the latest schema). */
 export const SCHEMA_SQL = `
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
@@ -99,4 +99,43 @@ CREATE TABLE IF NOT EXISTS app_meta (
   key TEXT PRIMARY KEY,
   value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS smear (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at INTEGER NOT NULL,
+  photo_uri TEXT NOT NULL,
+  species TEXT NOT NULL,
+  parasitemia_pct REAL NOT NULL,
+  confidence REAL NOT NULL,
+  band TEXT NOT NULL,
+  recommendation TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  duration_ms INTEGER,
+  notes TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_smear_created ON smear(created_at DESC);
 `;
+
+/**
+ * Additive migrations for existing installs. `SCHEMA_SQL` above already has
+ * the latest shape, so v1-fresh installs skip these. `database.ts` replays
+ * any missing block based on PRAGMA user_version.
+ */
+export const MIGRATIONS: Record<number, string> = {
+  2: `
+    CREATE TABLE IF NOT EXISTS smear (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at INTEGER NOT NULL,
+      photo_uri TEXT NOT NULL,
+      species TEXT NOT NULL,
+      parasitemia_pct REAL NOT NULL,
+      confidence REAL NOT NULL,
+      band TEXT NOT NULL,
+      recommendation TEXT NOT NULL,
+      model_id TEXT NOT NULL,
+      duration_ms INTEGER,
+      notes TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_smear_created ON smear(created_at DESC);
+  `,
+};

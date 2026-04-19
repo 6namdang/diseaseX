@@ -13,6 +13,7 @@ import { Suspense, useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { DATABASE_NAME, initDatabase } from '../db/database';
 import { palette } from '../constants/designTokens';
+import { LanguageProvider } from '../i18n/LanguageContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -33,8 +34,10 @@ export default function RootLayout() {
   return (
     <Suspense fallback={<Loading />}>
       <SQLiteProvider databaseName={DATABASE_NAME} onInit={initDatabase} useSuspense>
-        <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false }} />
+        <LanguageProvider>
+          <StatusBar style="dark" />
+          <Stack screenOptions={{ headerShown: false }} />
+        </LanguageProvider>
       </SQLiteProvider>
     </Suspense>
   );
